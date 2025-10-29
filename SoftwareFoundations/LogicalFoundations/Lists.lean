@@ -1,6 +1,5 @@
-import Lake.Config.Meta
 import Std.Tactic.Do.Syntax
-
+import Lake.Config.Meta
 /-! # Working with Structured Data
 -/
 
@@ -69,17 +68,6 @@ namespace NatList
 
 example : NatList := cons 1 (cons 2 (cons 3 nil))
 
--- #check 1::[2]
--- #check #[1,2]
-#check «term[_]»
-#check «term#[_,]»
-#check Vector.«term#v[_,]»
-#check List.toArray
-#check Lean.Syntax.TSepArray.getElems
-#check Lean.Parser.Tactic.MCasesPat.parse.goAlts
-#check Lake.expandConfigDecl
-
--- @[inherit_doc]
 local infixr:67 " :: " => cons
 local syntax (priority := high) "[" withoutPosition(sepBy(term, ";", "; ", allowTrailingSep)) "]" : term
 local macro_rules
@@ -93,5 +81,62 @@ example := [1;2;3]
 example : [] = nil := rfl
 example : [1] = 1 :: nil := rfl
 example : [1;2;3] = 1 :: 2 :: 3 :: nil := rfl
+
+def «repeat» (n : Nat) : (count : Nat) → NatList
+  | 0 => []
+  | count + 1 => n :: «repeat» n count
+
+def length : NatList → Nat
+  | [] => 0
+  | _ :: t => t.length + 1
+
+def append : NatList → NatList → NatList
+  | [], l₂ => l₂
+  | h :: t, l₂ => h :: append t l₂
+
+local instance : Append NatList where append
+
+example : [1;2;3] ++ [4;5] = [1;2;3;4;5] := rfl
+example : [] ++ [4;5] = [4;5] := rfl
+example : [1;2;3] ++ [] = [1;2;3] := rfl
+
+def headD (default : Nat) : NatList → Nat
+  | [] | default :: _ => default
+
+def tail : NatList → NatList
+  | [] => []
+  | _ :: t => t
+
+example : headD 0 [1;2;3] = 1 := rfl
+example : headD 0 [] = 0 := rfl
+example : tail [1;2;3] = [2;3] := rfl
+
+def nonzeros : NatList → NatList
+  | [] => []
+  | 0 :: t => nonzeros t
+  | h :: t => h :: nonzeros t
+
+example : nonzeros [0;1;0;2;3;0;0] = [1;2;3] := rfl
+
+def oddmembers : NatList → NatList
+  | [] => []
+  | h :: t => let t := oddmembers t ; if h % 2 = 1 then h :: t else t
+
+example : oddmembers [0;1;0;2;3;0;0] = [1;3] := rfl
+
+def countoddmembers (l : NatList) : Nat := l.oddmembers.length
+
+example : countoddmembers [1;0;3;1;4;5] = 4 := rfl
+example : countoddmembers [0;2;4] = 0 := rfl
+example : countoddmembers nil = 0 := rfl
+
+def alternate : NatList → NatList → NatList
+  | [], l | l, [] => l
+  | h₁ :: t₁, h₂ :: t₂ => h₁ :: h₂ :: alternate t₁ t₂
+
+example : alternate [1;2;3] [4;5;6] = [1;4;2;5;3;6] := rfl
+example : alternate [1] [4;5;6] = [1;4;5;6] := rfl
+example : alternate [1;2;3] [4] = [1;4;2;3] := rfl
+example : alternate [] [20;30] = [20;30] := rfl
 
 end NatList
