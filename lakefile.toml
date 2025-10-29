@@ -1,10 +1,13 @@
 name = "lean4-tutorial"
 version = "0.1.0"
-defaultTargets = ["lean4-tutorial"]
+defaultTargets = ["grader"]
 
 [[lean_lib]]
-name = "Lean4Tutorial"
+name = "SoftwareFoundations"
+
+[[lean_lib]]
+name = "Book"
 
 [[lean_exe]]
-name = "lean4-tutorial"
+name = "grader"
 root = "Main"

@@ -1,4 +1,4 @@
-import Lean4Tutorial
+import SoftwareFoundations
 
 def main : IO Unit :=
-  IO.println s!"Hello, {hello}!"
+  .println "Hello"
