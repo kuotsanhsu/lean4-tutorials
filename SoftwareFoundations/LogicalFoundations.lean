@@ -12,7 +12,7 @@ example : Book where
       "Michael Greenberg",
       "Cătălin Hriţcu",
       "Vilhelm Sjöberg",
-      "Brent",
+      "Brent Yorgey",
     ]
   editor := #["Benjamin C. Pierce"]
   title := "Logical Foundations"
