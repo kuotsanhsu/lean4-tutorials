@@ -82,9 +82,10 @@ example : [] = nil := rfl
 example : [1] = 1 :: nil := rfl
 example : [1;2;3] = 1 :: 2 :: 3 :: nil := rfl
 
-def «repeat» (n : Nat) : (count : Nat) → NatList
+#check List.replicate
+def replicate (n : Nat) : (count : Nat) → NatList
   | 0 => []
-  | count + 1 => n :: «repeat» n count
+  | count + 1 => n :: replicate n count
 
 def length : NatList → Nat
   | [] => 0
