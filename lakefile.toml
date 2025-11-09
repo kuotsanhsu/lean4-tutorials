@@ -8,6 +8,9 @@ name = "SoftwareFoundations"
 [[lean_lib]]
 name = "Book"
 
+[[lean_lib]]
+name = "Graph"
+
 [[lean_exe]]
 name = "grader"
 root = "Main"
