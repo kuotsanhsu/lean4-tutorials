@@ -11,14 +11,14 @@ inductive NatProd
 
 namespace NatProd
 
-#check (pair 3 5 : NatProd)
+/-- info: pair 3 5 : NatProd -/ #guard_msgs in #check pair 3 5
 def fst : NatProd → Nat | pair x _ => x
 def snd : NatProd → Nat | pair _ y => y
-#eval fst (pair 3 5) -- 3
+/-- info: 3 -/ #guard_msgs in #eval fst (pair 3 5)
 
 -- `Notation "( x , y )" := (pair x y).`
 
-#eval fst ⟨3, 5⟩ -- 3
+/-- info: 3 -/ #guard_msgs in #eval fst ⟨3, 5⟩
 def fst' : NatProd → Nat | ⟨x, _⟩ => x
 def snd' : NatProd → Nat | ⟨_, y⟩ => y
 def swap : NatProd → NatProd | ⟨x, y⟩ => ⟨y, x⟩
@@ -82,7 +82,14 @@ example : [] = nil := rfl
 example : [1] = 1 :: nil := rfl
 example : [1;2;3] = 1 :: 2 :: 3 :: nil := rfl
 
-#check List.replicate
+/--
+info: equations:
+@[defeq] theorem List.replicate.eq_1.{u} : ∀ {α : Type u} (x : α), List.replicate 0 x = []
+@[defeq] theorem List.replicate.eq_2.{u} : ∀ {α : Type u} (x : α) (n : Nat),
+  List.replicate n.succ x = x :: List.replicate n x
+-/
+#guard_msgs in
+#print eqns List.replicate
 def replicate (n : Nat) : (count : Nat) → NatList
   | 0 => []
   | count + 1 => n :: replicate n count

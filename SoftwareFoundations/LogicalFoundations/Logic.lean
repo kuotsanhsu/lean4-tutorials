@@ -1,4 +1,4 @@
-#check Classical.em
+example : ∀ p, p ∨ ¬p := Classical.em
 def excluded_middle : Prop := ∀ p : Prop, p ∨ ¬p
 
 /-! ## Exercise: 5 stars, standard, optional (classical_axioms)
@@ -12,10 +12,10 @@ Hint: Rather than considering all pairs of statements pairwise, prove a single c
 
 def peirce : Prop := ∀ p q : Prop, ((p → q) → p) → p
 
-#check Classical.not_not
+example : ∀ {p}, ¬¬p ↔ p := Classical.not_not
 def double_negation_elim : Prop := ∀ p : Prop, ¬¬p → p
 
-#check Classical.not_and_iff_not_or_not
+example : ∀ {p q}, ¬(p ∧ q) ↔ ¬p ∨ ¬q := Classical.not_and_iff_not_or_not
 def de_morgan_not_and_not : Prop := ∀ p q : Prop, ¬(¬p ∧ ¬q) → p ∨ q
 
 def implies_to_or : Prop := ∀ p q : Prop, (p → q) → (¬p ∨ q)
@@ -52,7 +52,7 @@ example : consequentia_mirabilis → excluded_middle
     False.elim <| h' <| .inr
     fun hp : p => h' <| .inl hp
 
-example p : p → ¬¬p | hp, hnp => hnp hp
-example p : ¬¬(p ∨ ¬p) | h => h (.inr (h ∘ .inl))
-example p : ¬¬(p ∨ ¬p) | h => (h ∘ .inr) (h ∘ .inl)
-#check not_not_em
+example : p → ¬¬p | hp, hnp => hnp hp
+example : ¬¬(p ∨ ¬p) | h => h (.inr (h ∘ .inl))
+example : ¬¬(p ∨ ¬p) | h => (h ∘ .inr) (h ∘ .inl)
+example : ∀ p, ¬¬(p ∨ ¬p) := not_not_em

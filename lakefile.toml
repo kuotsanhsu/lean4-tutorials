@@ -2,6 +2,9 @@ name = "lean4-tutorial"
 version = "0.1.0"
 defaultTargets = ["grader"]
 
+[leanOptions]
+relaxedAutoImplicit = false
+
 [[lean_lib]]
 name = "SoftwareFoundations"
 

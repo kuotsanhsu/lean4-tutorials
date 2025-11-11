@@ -419,7 +419,7 @@ theorem O_le_n : {n : Nat} → 0 ≤ n
 
 section
 set_option autoImplicit false
-variable {a b c d : Nat}
+variable {a b c : Nat}
 
 example : a ≤ b → b ≤ c → a ≤ c := (Nat.le.rec · fun _ => .step)
 example : 0 ≤ a := a.rec .refl fun _ => .step
