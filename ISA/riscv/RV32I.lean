@@ -54,8 +54,8 @@ instance : Coe (IType i) (IsInstruction i) where coe := ofIType
 instance : Coe (UType i) (IsInstruction i) where coe := ofUType
 instance : Coe (RType i) (IsInstruction i) where coe := ofRType
 
-export IType (addi slti sltiu xori ori andi slli srli srai)
-export UType (lui auipc)
+-- export IType (addi slti sltiu xori ori andi slli srli srai)
+-- export UType (lui auipc)
 export RType (add sub sll slt sltu xor srl sra or and)
 
 end IsInstruction
@@ -64,14 +64,32 @@ def Instruction := Subtype IsInstruction
 
 @[inline] def opcode (i : UInt32) : BitVec 7 := i.toBitVec.extractLsb'  0 7
 @[inline] def rd     (i : UInt32) : BitVec 5 := i.toBitVec.extractLsb'  7 5
+@[inline] def «imm[31:12]» (i : UInt32) : BitVec 20 := i.toBitVec.extractLsb' 12 20
 @[inline] def funct3 (i : UInt32) : BitVec 3 := i.toBitVec.extractLsb' 12 3
 @[inline] def rs1    (i : UInt32) : BitVec 5 := i.toBitVec.extractLsb' 15 5
+@[inline] def «imm[11:0]» (i : UInt32) : BitVec 12 := i.toBitVec.extractLsb' 20 12
 @[inline] def rs2    (i : UInt32) : BitVec 5 := i.toBitVec.extractLsb' 20 5
 @[inline] def funct7 (i : UInt32) : BitVec 7 := i.toBitVec.extractLsb' 25 7
 
 theorem aux {v w} (x : BitVec v) (y : BitVec w) : (x ++ y).extractLsb' 0 w  = y.extractLsb' 0 w :=
   -- BitVec.extractLsb'_append_eq_of_add_le <| show 0 + w ≤ w by simp
   by grind
+
+theorem aux_eq (i : UInt32) :
+    UInt32.ofBitVec (funct7 i ++ rs2 i ++ rs1 i ++ funct3 i ++ rd i ++ opcode i) = i :=
+  let x := i.toBitVec
+  UInt32.eq_of_toBitVec_eq <|
+  calc funct7 i ++ rs2 i ++ rs1 i ++ funct3 i ++ rd i ++ opcode i
+   _ = «imm[11:0]» i ++ rs1 i ++ funct3 i ++ rd i ++ opcode i
+    := congrArg (· ++ _ ++ _ ++ _ ++ _) <| x.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
+   _ = x.extractLsb' 15 17 ++ funct3 i ++ rd i ++ opcode i
+    := congrArg (· ++ _ ++ _ ++ _) <| x.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
+   _ = «imm[31:12]» i ++ rd i ++ opcode i
+    := congrArg (· ++ _ ++ _) <| x.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
+   _ = x.extractLsb' 7 25 ++ opcode i
+    := congrArg (· ++ _) <| x.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
+   _ = x.extractLsb' 0 32 := x.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
+   _ = x := x.extractLsb'_eq_self
 
 section
 variable {i : UInt32}
@@ -86,7 +104,11 @@ theorem UType.opcode_eq : UType i → opcode i = 0b011_0111 ∨ opcode i = 0b001
 theorem RType.opcode_eq : RType i → opcode i = 0b011_0011
   | h => by cases h <;> exact aux _ 0b011_0011#7
 
-theorem ofUType_self : ofUType (i.toBitVec.extractLsb' 12 20) (rd i) (opcode i) = i :=
+theorem ofIType_self (h : opcode i = 0b001_0011) :
+    ofIType («imm[11:0]» i) (rs1 i) (funct3 i) (rd i) = i :=
+  sorry
+
+theorem ofUType_self : ofUType («imm[31:12]» i) (rd i) (opcode i) = i :=
   let x := i.toBitVec
   UInt32.eq_of_toBitVec_eq <|
   calc x.extractLsb' 12 20 ++ rd i ++ opcode i
@@ -94,6 +116,12 @@ theorem ofUType_self : ofUType (i.toBitVec.extractLsb' 12 20) (rd i) (opcode i) 
     := congrArg (· ++ opcode i) <| BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
     _ = x.extractLsb' 0 32 := BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' rfl
     _ = x := BitVec.extractLsb'_eq_self
+
+theorem ofRType_self (h : opcode i = 0b011_0011) :
+    ofRType (funct7 i) (rs2 i) (rs1 i) (funct3 i) (rd i) = i :=
+  calc UInt32.ofBitVec (_ ++ 0b011_0011#7)
+   _ = UInt32.ofBitVec (_ ++ opcode i) := h ▸ rfl
+   _ = i := aux_eq i
 
 end
 
@@ -103,31 +131,53 @@ instance decIsInstruction : DecidablePred IsInstruction := fun i =>
   let opcode := opcode i
   if hI : opcode = 0b001_0011 then
     let funct3 := funct3 i
-    if funct3 = 0b001 then
+    have : UInt32.ofBitVec (_ ++ _ ++ funct3 ++ _ ++ _) = i := ofIType_self hI
+    match f3 : funct3 with
+    | 0b000 => isTrue <| show IType i from this ▸ .addi  ..
+    | 0b010 => isTrue <| show IType i from this ▸ .slti  ..
+    | 0b011 => isTrue <| show IType i from this ▸ .sltiu ..
+    | 0b100 => isTrue <| show IType i from this ▸ .xori  ..
+    | 0b110 => isTrue <| show IType i from this ▸ .ori   ..
+    | 0b111 => isTrue <| show IType i from this ▸ .andi  ..
+    | 0b001 =>
       let funct7 := funct7 i
-      if funct7 = 0 then
-        isTrue sorry
+      if f7 : funct7 = 0 then
+        suffices _ from isTrue <| show IType i from this ▸ f7 ▸ f3 ▸ hI ▸ .slli ..
+        show UInt32.ofBitVec (funct7 ++ _ ++ _ ++ funct3 ++ _ ++ opcode) = i from aux_eq i
       else
         isFalse sorry
-    else if funct3 = 0b101 then
+    | 0b101 =>
       let funct7 := funct7 i
-      if funct7 = 0 ∨ funct7 = 0x20 then
-        isTrue sorry
-      else
-        isFalse sorry
-    else
-      isTrue sorry
+      match f7 : funct7 with
+      | 0    => suffices _ from isTrue <| show IType i from this ▸ f7 ▸ f3 ▸ hI ▸ .srli ..
+        show UInt32.ofBitVec (funct7 ++ _ ++ _ ++ funct3 ++ _ ++ opcode) = i from aux_eq i
+      | 0x20 => suffices _ from isTrue <| show IType i from this ▸ f7 ▸ f3 ▸ hI ▸ .srai ..
+        show UInt32.ofBitVec (funct7 ++ _ ++ _ ++ funct3 ++ _ ++ opcode) = i from aux_eq i
+      | _ => isFalse sorry
   else if hU : opcode = 0b011_0111 ∨ opcode = 0b001_0111 then
     suffices UType i from isTrue this
-    let imm := i.toBitVec.extractLsb' 12 20
+    let imm := «imm[31:12]» i
     let dest := rd i
     have e : ofUType imm dest opcode = i := ofUType_self
     suffices UType (ofUType imm dest opcode) from e.rec this
     hU.rec (· ▸ .lui imm dest) (· ▸ .auipc imm dest)
   else if hR : opcode = 0b011_0011 then
     let funct7 := funct7 i
-    if funct7 = 0 then
-      isTrue sorry
+    if f7 : funct7 = 0 then
+      let funct3 := funct3 i
+      have :=
+        calc UInt32.ofBitVec (0#7 ++ rs2 i ++ rs1 i ++ funct3 ++ rd i ++ 0b011_0011#7)
+         _ = UInt32.ofBitVec (funct7 ++ _ ++ _ ++ _ ++ _ ++ opcode) := f7 ▸ hR ▸ rfl
+         _ = i := aux_eq i
+      match funct3 with
+      | 0b000 => isTrue <| show RType i from this ▸ .add  ..
+      | 0b001 => isTrue <| show RType i from this ▸ .sll  ..
+      | 0b010 => isTrue <| show RType i from this ▸ .slt  ..
+      | 0b011 => isTrue <| show RType i from this ▸ .sltu ..
+      | 0b100 => isTrue <| show RType i from this ▸ .xor  ..
+      | 0b101 => isTrue <| show RType i from this ▸ .srl  ..
+      | 0b110 => isTrue <| show RType i from this ▸ .or   ..
+      | 0b111 => isTrue <| show RType i from this ▸ .and  ..
     else if funct7 = 0x20 then
       let funct3 := funct3 i
       if funct3 = 0 ∨ funct3 = 0b101 then
@@ -174,6 +224,12 @@ structure Instruction.Visitor (m) [Monad m] (α) where
 #check List.mapM
 #check IO.println
 
+#check_failure Instruction.rec
+
+def Instruction.rec.{u} {motive : Instruction → Sort u}
+    (add : (src2 src1 dest : BitVec 5) → motive ⟨ofRType    0 src2 src1 0b000 dest, .add src2 src1 dest⟩)
+  : (i : Instruction) → motive i := sorry
+
 def Instruction.disassemblyVisitor {m} [Monad m] : Visitor m String where
   -- IType
   addi  imm   rs  rd := pure s!"addi    {rd}, {rs}, {imm}"
@@ -202,48 +258,21 @@ def Instruction.disassemblyVisitor {m} [Monad m] : Visitor m String where
   -- Error
   unknown i := pure "bad"
 
+section
+#check Nat.rec
+
+def Instruction.recAux.{u} {motive : UInt32 → Sort u}
+    (known : (i : Instruction) → motive i.val)
+    (unknown : (i : UInt32) → motive i)
+    (i : UInt32) : motive i := unknown i
+
+end
+
+def Instruction.decode? (i : UInt32) : Option Instruction :=
+  if h : IsInstruction i then some ⟨i, h⟩ else none
+
 def Instruction.Visitor.visit {m} [Monad m] {α} (visitor : Visitor m α) (i : UInt32) : m α := do
-  let opcode := opcode i
-  if hI : opcode = 0b001_0011 then
-    let funct3 := funct3 i
-    if funct3 = 0b001 then
-      let funct7 := funct7 i
-      if funct7 = 0 then
-        isTrue sorry
-      else
-        isFalse sorry
-    else if funct3 = 0b101 then
-      let funct7 := funct7 i
-      if funct7 = 0 ∨ funct7 = 0x20 then
-        isTrue sorry
-      else
-        isFalse sorry
-    else
-      isTrue sorry
-  else if hU : opcode = 0b011_0111 ∨ opcode = 0b001_0111 then
-    suffices UType i from isTrue this
-    let imm := i.toBitVec.extractLsb' 12 20
-    let dest := rd i
-    have e : ofUType imm dest opcode = i := ofUType_self
-    suffices UType (ofUType imm dest opcode) from e.rec this
-    hU.rec (· ▸ .lui imm dest) (· ▸ .auipc imm dest)
-  else if hR : opcode = 0b011_0011 then
-    let funct7 := funct7 i
-    if funct7 = 0 then
-      isTrue sorry
-    else if funct7 = 0x20 then
-      let funct3 := funct3 i
-      if funct3 = 0 ∨ funct3 = 0b101 then
-        isTrue sorry
-      else
-        isFalse sorry
-    else
-      isFalse sorry
-  else
-    isFalse fun
-    | .ofIType h => hI h.opcode_eq
-    | .ofUType h => hU h.opcode_eq
-    | .ofRType h => hR h.opcode_eq
+  sorry
 
 def Instruction.disassemble (i : UInt32) : IO Unit := do
   IO.println (← disassemblyVisitor.visit i)
