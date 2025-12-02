@@ -102,30 +102,121 @@ theorem Mem.trans {a} {t₁ t₂ : BinTree α} (h : a ∈ t₁) : t₁ ⊆ t₂ 
 section
 variable {β m} [Monad m]
 
-@[inline] def forIn' (tree : BinTree α) (init : β) (f : ∀ a ∈ tree, β → m (ForInStep β)) : m β := do
-  match ← inorder tree init Subtree.rfl with
-  | .done b
-  | .yield b => return b
+@[inline] def forIn' (tree : BinTree α) (init : β) (f : ∀ a ∈ tree, β → m (ForInStep β)) : m β :=
+  inorder init tree Subtree.rfl <&> ForInStep.value
 where
-  @[specialize] inorder (subtree : BinTree α) (b : β) (h : subtree ⊆ tree) : m (ForInStep β) := do
-    match subtree with
-    | leaf => return .yield b
-    | node data left right =>
-      match ← inorder left b (Subtree.rfl.left.trans h) with
-      | r@(.done _) => return r
-      | .yield b =>
-        match ← f data (Mem.curr.trans h) b with
-        | r@(.done _) => return r
-        | .yield b => inorder right b (Subtree.rfl.right.trans h)
+  @[specialize] inorder (b : β) : ∀ subtree ⊆ tree, m (ForInStep β)
+    | leaf, _ => pure (.yield b)
+    | node data left right, h => do
+      let := inorder b left (Subtree.rfl.left.trans h)
+      let .yield b ← this | this
+      let := f data (Mem.curr.trans h) b
+      let .yield b ← this | this
+      inorder b right (Subtree.rfl.right.trans h)
 
 instance : ForIn' m (BinTree α) α inferInstance where forIn'
 
 end
 
-example (tree : BinTree Nat) : IO Unit := do
-  for h : data in tree do
-    println! data
+/-- info: 123 -/
+#guard_msgs in
+#eval show IO Unit from
+  let tree : BinTree Nat := node 2 (node 1 leaf leaf) (node 3 leaf leaf)
+  for data in tree do
+    IO.print data
 
 def toSortedList : BinTree α → List α
   | leaf => []
   | node data left right => left.toSortedList ++ data :: right.toSortedList
+
+/-!
+- [Types of binary trees](https://en.wikipedia.org/wiki/Binary_tree#Types_of_binary_trees)
+-/
+
+inductive IsFull : BinTree α → Prop
+  | leaf : leaf.IsFull
+  | node {data left right} : left.IsFull → right.IsFull → (node data left right).IsFull
+
+-- inductive Subtree.Level {subtree tree : BinTree α} : subtree ⊆ tree → Nat → Prop
+
+def height : BinTree α → Nat
+  | leaf => 0
+  | node _ left right => max left.height right.height + 1
+
+inductive IsPerfect : BinTree α → (height : Nat) → Prop
+  | leaf : leaf.IsPerfect 0
+  | node {data left right} height :
+    left.IsPerfect height → right.IsPerfect height → (node data left right).IsPerfect (height + 1)
+
+def Perfect (tree : BinTree α) := tree.IsPerfect tree.height
+
+namespace IsPerfect
+
+theorem height_eq {height} : {tree : BinTree α} → tree.IsPerfect height → tree.height = height
+  | .leaf, leaf => rfl
+  | .node _ left right, node height hl hr =>
+    suffices max left.height right.height = height from congrArg Nat.succ this
+    calc max left.height right.height
+     _ = max left.height height := congrArg (max _ ·) hr.height_eq
+     _ = max height height := congrArg (max · _) hl.height_eq
+     _ = height := height.max_self
+
+theorem toPerfect {height} {tree : BinTree α} : tree.IsPerfect height → tree.Perfect
+  | hp => hp.height_eq.symm.subst hp
+
+end IsPerfect
+
+theorem Perfect.toIsFull {tree : BinTree α} : tree.Perfect → tree.IsFull
+  | .leaf => .leaf
+  | .node _ hl hr => .node hl.toPerfect.toIsFull hr.toPerfect.toIsFull
+
+inductive IsComplete : BinTree α → Prop
+
+inductive IsBalanced : BinTree α → Prop
+
+end BinTree
+
+structure Heap {α} (as : Array α) where
+  index : Nat
+  valid : index < as.size
+
+namespace Heap
+variable {α} {as : Array α}
+
+@[inline] def left (heap : Heap as) (valid : heap.index * 2 + 1 < as.size) : Heap as where
+  index := heap.index * 2 + 1
+  valid
+
+@[inline] def right (heap : Heap as) (valid : heap.index * 2 + 2 < as.size) : Heap as where
+  index := heap.index * 2 + 2
+  valid
+
+@[inline] def mk? (index : Nat) : Option (Heap as) :=
+  if valid : index < as.size then some {index, valid} else none
+
+@[inline] def left? (heap : Heap as) : Option (Heap as) :=
+  mk? (heap.index * 2 + 1)
+
+@[inline] def right? (heap : Heap as) : Option (Heap as) :=
+  mk? (heap.index * 2 + 2)
+
+inductive Mem (a : α) : Heap as → Prop
+  | curr {heap} : as[heap.index]'heap.valid = a → Mem a heap
+  | left {heap} (hl : heap.index * 2 + 1 < as.size) : Mem a (heap.left hl) → Mem a heap
+  | right {heap} (hr : heap.index * 2 + 2 < as.size) : Mem a (heap.right hr) → Mem a heap
+
+instance : Membership α (Heap as) where mem heap := heap.Mem
+
+end Heap
+
+/-- MaxHeap -/
+def Array.isHeap {α} [LT α] [DecidableLT α] (as : Array α) : Bool := Id.run do
+  for (i, a) in ← as.mapIdxM (Function.curry id) do
+    if let some l := as[i * 2 + 1]? then
+      if a < l then return false
+    if let some r := as[i * 2 + 2]? then
+      if a < r then return false
+  true
+
+#eval #[1,2,3,4,5].isHeap
+#eval #[1,2,3,4,5].reverse.isHeap
