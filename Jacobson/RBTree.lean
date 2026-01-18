@@ -36,7 +36,8 @@ where
 inductive RBTree.{u} (α : Sort u) : (isRed : Bool) → (blackHeight : Nat) → Sort (max 1 u)
   | leaf : RBTree α false 0
   | red (data : α) {n} (left right : RBTree α false n) : RBTree α true n
-  | black (data : α) n x (left : RBTree α x n) y (right : RBTree α y n) : RBTree α false n.succ
+  | black (data : α) n x (left : RBTree α x n) y (right : RBTree α y n) (leftLeaning : x || !y)
+    : RBTree α false n.succ
 
 namespace RBTree
 variable {α}
@@ -44,17 +45,17 @@ variable {α}
 def size {isRed n} : RBTree α isRed n → Nat
   | leaf => 0
   | red _ left right
-  | black _ _ _ left _ right => left.size + right.size + 1
+  | black _ _ _ left _ right _ => left.size + right.size + 1
 
 def height {isRed n} : RBTree α isRed n → Nat
   | leaf => 0
   | red _ left right
-  | black _ _ _ left _ right => max left.height right.height + 1
+  | black _ _ _ left _ right _ => max left.height right.height + 1
 
 theorem size_height {isRed n} : ∀ t : RBTree α isRed n, t.size < 2 ^ t.height
   | leaf => show 1 ≤ 1 from Nat.le.refl
   | red _ left right
-  | black _ _ _ left _ right =>
+  | black _ _ _ left _ right _ =>
     let m := 2 ^ left.height
     let n := 2 ^ right.height
     calc left.size + right.size + (1 + 1)
@@ -78,7 +79,7 @@ theorem height_blackHeight {n} : ∀ {isRed} (tree : RBTree α isRed n), tree.he
 
 theorem black_height_blackHeight {n} : ∀ tree : RBTree α false n, tree.height ≤ 2 * n
   | leaf => show 0 ≤ 0 from Nat.le.refl
-  | black _ n _ left _ right =>
+  | black _ n _ left _ right _ =>
     suffices max left.height right.height ≤ 2 * n + 1 from Nat.succ_le_succ this
     Nat.max_le_of_le_of_le left.height_blackHeight right.height_blackHeight
 end
@@ -87,7 +88,7 @@ mutual
 theorem blackHeight_height {n} : ∀ {isRed} (tree : RBTree α isRed n), n ≤ tree.height
   | true, tree => Nat.le_of_lt tree.red_blackHeight_height
   | false, leaf => show 0 ≤ 0 from Nat.le.refl
-  | false, black _ n _ left _ right =>
+  | false, black _ n _ left _ right _ =>
     suffices n ≤ max left.height right.height from Nat.succ_le_succ this
     calc n
      _ ≤ left.height := left.blackHeight_height
