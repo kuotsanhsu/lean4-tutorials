@@ -282,26 +282,19 @@ def height : Tree α → Nat
   | leaf => 0
   | node _ left right => max left.height right.height + 1
 
-theorem size_height : ∀ t : Tree α, t.size ≤ 2 ^ t.height - 1
-  | leaf => show 0 ≤ 0 from Nat.le.refl
+theorem size_height : ∀ t : Tree α, t.size + 1 ≤ 2 ^ t.height
+  | leaf => show 1 ≤ 1 from Nat.le.refl
   | node _ left right =>
     let m := 2 ^ left.height
     let n := 2 ^ right.height
-    calc left.size + right.size + 1
-     _ ≤ (m - 1) + (n - 1) + 1
-      := Nat.succ_le_succ (Nat.add_le_add left.size_height right.size_height)
-     _ = m + n - 1
-      :=
-        have : m ≠ 0 := Nat.ne_of_gt left.height.two_pow_pos
-        have : n ≠ 0 := Nat.ne_of_gt right.height.two_pow_pos
-        match m, n with | m + 1, n + 1 => show m + n + 1 = m + 1 + n from (m.succ_add n).symm
-     _ ≤ 2 ^ (max left.height right.height + 1) - 1
-      := Nat.pred_le_pred <|
-        calc m + n
-         _ ≤ max m n + max m n := Nat.add_le_add (m.le_max_left n) (m.le_max_right n)
-         _ = max m n * 2 := (max m n).mul_two.symm
-         _ = 2 ^ (max left.height right.height) * 2
-          := congrArg (· * 2) <| Nat.pow_max <| show 2 > 0 from Nat.le.refl.step
+    calc left.size + right.size + (1 + 1)
+     _ = (left.size + 1) + (right.size + 1) := Nat.add_add_add_comm ..
+     _ ≤ m + n := Nat.add_le_add left.size_height right.size_height
+     _ ≤ max m n + max m n := Nat.add_le_add (m.le_max_left n) (m.le_max_right n)
+     _ = max m n * 2 := (max m n).mul_two.symm
+     _ = 2 ^ max left.height right.height * 2
+      := congrArg (· * 2) <| Nat.pow_max <| show 2 > 0 from Nat.le.refl.step
+     _ = 2 ^ (max left.height right.height + 1) := rfl
 
 def BST.contains [LT α] [DecidableLT α] (a : α) : BST α → Bool
   | ⟨leaf, _⟩ => false

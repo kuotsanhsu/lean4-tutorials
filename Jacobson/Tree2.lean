@@ -119,10 +119,10 @@ instance : ForIn' m (BinTree α) α inferInstance where forIn'
 end
 
 /-- info: 123 -/
-#guard_msgs in
+#guard_msgs(info) in
 #eval show IO Unit from
   let tree : BinTree Nat := node 2 (node 1 leaf leaf) (node 3 leaf leaf)
-  for data in tree do
+  for h : data in tree do
     IO.print data
 
 def toSortedList : BinTree α → List α
@@ -252,9 +252,9 @@ A red-black tree satisfies these conditions.
 
 -- def RBTree (α) := BinTree (RBNode α)
 
-def CrTree (α) := BinTree (Bool × α)
+abbrev CrTree (α) := BinTree (Bool × α)
 
-namespace CrTree
+namespace BinTree
 variable {α}
 
 -- bad: RRR RRB RBR
@@ -262,26 +262,27 @@ variable {α}
 -- parent ∨ (left ∧ right) where black is true
 
 def isBlack : CrTree α → Bool
-  | .leaf => true
-  | .node ⟨b, _⟩ .. => b
+  | leaf => true
+  | node ⟨b, _⟩ .. => b
 
 inductive Parent : CrTree α → Prop
-  | leaf : Parent .leaf
-  | red {data left right} : isBlack left → isBlack right
-    → Parent left → Parent right → Parent (.node ⟨false, data⟩ left right)
-  | black {data left right} : Parent left → Parent right → Parent (.node ⟨true, data⟩ left right)
+  | leaf : leaf.Parent
+  | red {data left right} : left.isBlack → right.isBlack
+    → left.Parent → right.Parent → (node ⟨false, data⟩ left right).Parent
+  | black {data left right}
+    : left.Parent → right.Parent → (node ⟨true, data⟩ left right).Parent
 
 inductive BlackCount : CrTree α → Nat → Prop
-  | leaf : BlackCount .leaf 0
-  | red {data left right n} : BlackCount left n → BlackCount right n
-    → BlackCount (.node ⟨false, data⟩ left right) n
-  | black {data left right n} : BlackCount left n → BlackCount right n
-    → BlackCount (.node ⟨true, data⟩ left right) (n + 1)
+  | leaf : leaf.BlackCount 0
+  | red {data left right n} : left.BlackCount n → right.BlackCount n
+    → (node ⟨false, data⟩ left right).BlackCount n
+  | black {data left right n} : left.BlackCount n → right.BlackCount n
+    → (node ⟨true, data⟩ left right).BlackCount (n + 1)
 
 def blackCount : CrTree α → Nat
-  | .leaf => 0
-  | .node ⟨false, _⟩ left _ => blackCount left
-  | .node ⟨true, _⟩ left _ => blackCount left + 1
+  | leaf => 0
+  | node ⟨false, _⟩ left _ => left.blackCount
+  | node ⟨true, _⟩ left _ => left.blackCount + 1
 
 def SameBlackCount (tree : CrTree α) : Prop := tree.BlackCount tree.blackCount
 
@@ -289,15 +290,15 @@ class IsRBTree (tree : CrTree α) : Prop where
   parent : tree.Parent
   same_black_count : tree.SameBlackCount
 
-example : @IsRBTree α .leaf where
+example : @IsRBTree α leaf where
   parent := .leaf
   same_black_count := .leaf
 
-example {left right : CrTree α} : ∀ {x}, IsRBTree (.node x left right) → IsRBTree left
+example {left right : CrTree α} : ∀ {x}, (node x left right).IsRBTree → left.IsRBTree
   | _, ⟨.red _ _ hl₁ _, .red hl₂ _⟩
   | _, ⟨.black hl₁ _, .black hl₂ _⟩ => ⟨hl₁, hl₂⟩
 
-instance {left right : CrTree α} : ∀ {x}, IsRBTree (.node x left right) → IsRBTree right
+instance {left right : CrTree α} : ∀ {x}, (node x left right).IsRBTree → right.IsRBTree
   | _, ⟨.red _ _ _ hr₁, .red _ hr₂⟩ => ⟨hr₁, sorry⟩
   | _, ⟨.black hl₁ hr₁, .black hl₂ hr₂⟩ =>
     suffices left.blackCount = right.blackCount from ⟨hr₁, this.subst hr₂⟩
@@ -310,32 +311,30 @@ theorem height_blackCount (tree : CrTree α) [tree.IsRBTree] :
   if e : tree.isBlack then (black tree e).step else red tree e
 where
   black : (tree : CrTree α) → [tree.IsRBTree] → tree.isBlack → tree.height ≤ 2 * tree.blackCount
-    | .leaf, _, _ => show 0 ≤ 0 from Nat.le.refl
-    | .node _ left right, ⟨.black hl₁ hr₁, .black hl₂ hr₂⟩, _ =>
+    | leaf, _, _ => show 0 ≤ 0 from Nat.le.refl
+    | node _ left right, ⟨.black hl₁ hr₁, .black hl₂ hr₂⟩, _ =>
       have : left.height ≤ 2 * blackCount left + 1 :=
-        have : IsRBTree left := ⟨hl₁, hl₂⟩
-        if e : isBlack left then (black left e).step else red left e
-      let m := blackCount left
-      have e : m = blackCount right := sorry
-      have : right.height ≤ 2 * blackCount right + 1 :=
-        have : IsRBTree right := ⟨hr₁, e.subst hr₂⟩
-        if e : isBlack right then (black right e).step else red right e
+        have : left.IsRBTree := ⟨hl₁, hl₂⟩
+        if e : left.isBlack then (black left e).step else red left e
+      have e : left.blackCount = right.blackCount := sorry
+      have : right.height ≤ 2 * right.blackCount + 1 :=
+        have : right.IsRBTree := ⟨hr₁, e.subst hr₂⟩
+        if e : right.isBlack then (black right e).step else red right e
       calc max left.height right.height + 1
-      _ ≤ max (2 * m + 1) (2 * blackCount right + 1) + 1 := sorry
-      _ = 2 * m + 1 + 1 := congrArg Nat.succ <| e.rec (Nat.max_self _)
+      _ ≤ max (2 * left.blackCount + 1) (2 * right.blackCount + 1) + 1 := sorry
+      _ = 2 * left.blackCount + 1 + 1 := congrArg Nat.succ <| e.rec (Nat.max_self _)
   red : (tree : CrTree α) → [tree.IsRBTree] → ¬tree.isBlack → tree.height ≤ 2 * tree.blackCount + 1
-    | .node _ left right, ⟨.red hl hr hl₁ hr₁, .red hl₂ hr₂⟩, _ =>
-      have : left.height ≤ 2 * blackCount left :=
-        suffices IsRBTree left from black left hl
+    | node _ left right, ⟨.red hl hr hl₁ hr₁, .red hl₂ hr₂⟩, _ =>
+      have : left.height ≤ 2 * left.blackCount :=
+        suffices left.IsRBTree from black left hl
         ⟨hl₁, hl₂⟩
-      have : right.height ≤ 2 * blackCount right :=
-        suffices IsRBTree right from black right hr
+      have : right.height ≤ 2 * right.blackCount :=
+        suffices right.IsRBTree from black right hr
         ⟨hr₁, hr₂⟩
-      let m := blackCount left
-      have e : m = blackCount right := sorry
+      have e : left.blackCount = blackCount right := sorry
       calc max left.height right.height + 1
-      _ ≤ max (2 * m) (2 * blackCount right) + 1 := sorry
-      _ = 2 * m + 1 := congrArg Nat.succ <| e.rec (Nat.max_self _)
+      _ ≤ max (2 * left.blackCount) (2 * blackCount right) + 1 := sorry
+      _ = 2 * left.blackCount + 1 := congrArg Nat.succ <| e.rec (Nat.max_self _)
 
 theorem balanced : (tree : CrTree α) → tree.height ≤ (tree.size + 1).log2 * 2 := sorry
   -- | .leaf => show 0 ≤ (0 + 1).log2 * 2 from Nat.le.refl
@@ -348,7 +347,13 @@ theorem balanced : (tree : CrTree α) → tree.height ≤ (tree.size + 1).log2 *
   --   calc 2 ^ (max hl hr) * 2
   --    _ ≤ (sl + sr + 2) ^ 2 := sorry
 
-end CrTree
+def balanceLeft (a : α) : CrTree α → CrTree α → CrTree α
+  | node ⟨false, c⟩ (node ⟨false, b⟩ left middle) right, r
+  | node ⟨false, b⟩ left (node ⟨false, c⟩ middle right), r =>
+    node ⟨false, a⟩ (node ⟨true, b⟩ left middle) (node ⟨true, c⟩ right r)
+  | left, right => node ⟨true, a⟩ left right
+
+end BinTree
 
 #check Nat.log2
 #check Nat.log2_two_pow
