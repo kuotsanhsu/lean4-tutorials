@@ -12,9 +12,13 @@
 - https://www.nayuki.io/page/aa-tree-set
 - https://www.cs.princeton.edu/~appel/papers/redblack.pdf
 - https://ccs.neu.edu/~camoy/pub/red-black-tree.pdf
+- https://courses.cs.washington.edu/courses/cse373/23au/lessons/isomorphism/
+- https://stackoverflow.com/questions/65137513/red-black-tree-and-condition-for-coloring
 -/
 
 set_option autoImplicit false
+
+inductive N : Prop | zero | succ : N → N
 
 theorem Nat.pow_max {a m n : Nat} (pos : a > 0) : max (a ^ m) (a ^ n) = a ^ max m n :=
   Nat.le_antisymm mp mpr
@@ -36,8 +40,7 @@ where
 inductive RBTree.{u} (α : Sort u) : (isRed : Bool) → (blackHeight : Nat) → Sort (max 1 u)
   | leaf : RBTree α false 0
   | red (data : α) {n} (left right : RBTree α false n) : RBTree α true n
-  | black (data : α) n x (left : RBTree α x n) y (right : RBTree α y n) (leftLeaning : x || !y)
-    : RBTree α false n.succ
+  | black (data : α) n x (left : RBTree α x n) y (right : RBTree α y n) : RBTree α false n.succ
 
 namespace RBTree
 variable {α}
@@ -45,17 +48,17 @@ variable {α}
 def size {isRed n} : RBTree α isRed n → Nat
   | leaf => 0
   | red _ left right
-  | black _ _ _ left _ right _ => left.size + right.size + 1
+  | black _ _ _ left _ right => left.size + right.size + 1
 
 def height {isRed n} : RBTree α isRed n → Nat
   | leaf => 0
   | red _ left right
-  | black _ _ _ left _ right _ => max left.height right.height + 1
+  | black _ _ _ left _ right => max left.height right.height + 1
 
-theorem size_height {isRed n} : ∀ t : RBTree α isRed n, t.size < 2 ^ t.height
+theorem size_height {isRed n} : ∀ tree : RBTree α isRed n, tree.size < 2 ^ tree.height
   | leaf => show 1 ≤ 1 from Nat.le.refl
   | red _ left right
-  | black _ _ _ left _ right _ =>
+  | black _ _ _ left _ right =>
     let m := 2 ^ left.height
     let n := 2 ^ right.height
     calc left.size + right.size + (1 + 1)
@@ -79,7 +82,7 @@ theorem height_blackHeight {n} : ∀ {isRed} (tree : RBTree α isRed n), tree.he
 
 theorem black_height_blackHeight {n} : ∀ tree : RBTree α false n, tree.height ≤ 2 * n
   | leaf => show 0 ≤ 0 from Nat.le.refl
-  | black _ n _ left _ right _ =>
+  | black _ n _ left _ right =>
     suffices max left.height right.height ≤ 2 * n + 1 from Nat.succ_le_succ this
     Nat.max_le_of_le_of_le left.height_blackHeight right.height_blackHeight
 end
@@ -88,7 +91,7 @@ mutual
 theorem blackHeight_height {n} : ∀ {isRed} (tree : RBTree α isRed n), n ≤ tree.height
   | true, tree => Nat.le_of_lt tree.red_blackHeight_height
   | false, leaf => show 0 ≤ 0 from Nat.le.refl
-  | false, black _ n _ left _ right _ =>
+  | false, black _ n _ left _ right =>
     suffices n ≤ max left.height right.height from Nat.succ_le_succ this
     calc n
      _ ≤ left.height := left.blackHeight_height
@@ -100,5 +103,43 @@ theorem red_blackHeight_height {n} : ∀ tree : RBTree α true n, n < tree.heigh
      _ ≤ left.height := left.blackHeight_height
      _ ≤ max left.height _ := Nat.le_max_left ..
 end
+
+/-!
+data RBTree a = Leaf | Fork Color (RBTree a) a (RBTree a)
+data Color = R | B
+
+insert :: Ord a => a -> RBTree a -> RBTree a
+insert a b = Fork B d e f
+  where
+    Fork _ d e f = ins a b
+    ins x Leaf = Fork R Leaf x Leaf
+    ins x t@(Fork c l y r) = case compare x y of
+        LT -> balanceL c (ins x l) y r
+        GT -> balanceR c l y (ins x r)
+        EQ -> t
+
+balanceL :: Color -> RBTree a -> a -> RBTree a -> RBTree a
+balanceL B (Fork R (Fork R a x b) y c) z d = Fork R (Fork B a x b) y (Fork B c z d)
+balanceL B (Fork R a x (Fork R b y c)) z d = Fork R (Fork B a x b) y (Fork B c z d)
+balanceL k a x b                           = Fork k a x b
+
+balanceR :: Color -> RBTree a -> a -> RBTree a -> RBTree a
+balanceR B a x (Fork R b y (Fork R c z d)) = Fork R (Fork B a x b) y (Fork B c z d)
+balanceR B a x (Fork R (Fork R b y c) z d) = Fork R (Fork B a x b) y (Fork B c z d)
+balanceR k a x b                           = Fork k a x b
+-/
+
+def ins_isRed {isRed n} : RBTree α isRed n → Bool
+  | leaf => true
+  | _ => false
+
+def ins_n {isRed n} : RBTree α isRed n → Nat
+  | leaf => 0
+  | _ => 1
+
+def ins (data : α) {isRed n} : (tree : RBTree α isRed n) → RBTree α tree.ins_isRed tree.ins_n
+  | leaf => red data leaf leaf
+  | red .. => sorry
+  | black .. => sorry
 
 end RBTree
