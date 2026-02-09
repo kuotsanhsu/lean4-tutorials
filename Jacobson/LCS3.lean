@@ -14,9 +14,6 @@ theorems: `lcs1_eq_lcs0` and `lcs2_eq_lcs1`; nowhere else is `sorry` to be seen.
 
 -/
 
-theorem congr_ite {α β c t e} [h : Decidable c] (f : α → β) : f (ite c t e) = ite c (f t) (f e) :=
-  match h with | isTrue _ | isFalse _ => rfl
-
 namespace List
 variable {α} [DecidableEq α]
 
@@ -131,12 +128,14 @@ def DPS.dp : DPS α → DP α
   | (_, dp)::_ => dp
 
 abbrev dps0 (ys : List α) : DPS α := ys.map (·, dp0)
+/-!
 theorem dps0_ys : {ys : List α} → ys.dps0.ys = ys
   | [] => rfl
   | y :: bs =>
     calc DPS.ys ((y :: bs).map (·, dp0))
     _  = (y :: bs).map id := map_map
     _  = y :: bs := map_id _
+-/
 
 /-- Quadratic space dynamic programming. -/
 def lcs1 (xs ys : List α) : List α := aux0.dp.lcs
@@ -210,27 +209,14 @@ theorem aux0_ex {y : α} {xs ys : List α} :
     _  = (y, eq) :: lcs1.aux0 (x :: xs) ys := h
     _  = (y, dp) :: lcs1.aux0 (x :: xs) ys := this.rec rfl
 
-theorem dps0_dp0 {ys : List α} : ys.dps0.dp = dp0 :=
-  match ys with | [] | _ :: _ => rfl
-
-/-!
-theorem aux0_eq {y : α} {xs ys : List α} :
-    lcs1.aux0 xs (y :: ys) = (y, (lcs1.aux0 xs ys).dp) :: lcs1.aux0 xs ys :=
-  match xs with
-  | [] => show (y, dp0) :: ys.dps0 = (y, ys.dps0.dp) :: ys.dps0 by rw [dps0_dp0]
-  | x :: xs =>
-    let dp := (lcs1.aux0 (x :: xs) ys).dp
-    let xx := (lcs1.aux0 xs ys).dp
-    calc lcs1.aux1 x (lcs1.aux0 xs (y::ys))
-    _  = lcs1.aux1 x ((y, xx) :: lcs1.aux0 xs ys) := congrArg (lcs1.aux1 x) aux0_eq
-    -- _  = lcs1.aux1 x ((y, xx) :: xs.foldr lcs1.aux1 ys.dps0) := rfl
-    _  = ( ((y, xx) :: lcs1.aux0 xs ys).foldr (lcs1.aux2 x) ([], dp0, dp0) ).1 := rfl
-    _  = ( lcs1.aux2 x (y, xx) ⟨lcs1.aux1 x (lcs1.aux0 xs ys), _, _⟩ ).1 := rfl
-    _  = ( lcs1.aux2 x (y, xx) ⟨lcs1.aux0 (x :: xs) ys, _, _⟩ ).1 := rfl
-    _  = (y, dp)::lcs1.aux0 (x :: xs) ys := sorry
--/
-
-example {x : α} {xs ys : List α} : lcs1.aux1 x (lcs1.aux0 xs ys) = lcs1.aux0 (x :: xs) ys := rfl
+section
+variable {x y : α} {xs ys : List α}
+example : lcs1.aux1 x (lcs1.aux0 xs ys) = lcs1.aux0 (x :: xs) ys := rfl
+example {xx dps yy xy} : lcs1.aux2 x (y, xx) (dps, yy, xy) =
+    ((y, lcs1.aux3 x y xx yy xy) :: dps, lcs1.aux3 x y xx yy xy, xx) := rfl
+example : lcs1.aux0 [] ys = ys.dps0 := rfl
+example : lcs1 [] ys = [] := ys.casesOn rfl fun _ _ => rfl
+end
 
 theorem aux0_nil {xs : List α} : lcs1.aux0 xs [] = [] :=
   match xs with
@@ -295,184 +281,80 @@ theorem aux0_rec {x y : α} {xs ys : List α} :
   _  = (y, dp) :: lcs1.aux0 (x :: xs) ys := this.rec rfl
 end
 
-example {x y : α} {xs ys : List α} {xx yy xy : DP α}
-    (hxx : lcs1.aux0 xs (y::ys) = (y, xx)::lcs1.aux0 xs ys)
-    (hyy : (lcs1.aux0 (x::xs) ys).dp = yy)
-    (hxy : (lcs1.aux0 xs ys).dp = xy)
-  : lcs1.aux0 (x::xs) (y::ys) = (y, lcs1.aux3 x y xx yy xy)::lcs1.aux0 (x::xs) ys :=
-  calc (x::xs).foldr lcs1.aux1 (y::ys).dps0
-  _  = (y, _)::(x::xs).foldr lcs1.aux1 ys.dps0 := sorry
+theorem nil_lcs1 {ys : List α} : lcs1 [] ys = [] := ys.casesOn rfl fun _ _ => rfl
+theorem lcs1_nil {xs : List α} : lcs1 xs [] = [] := congrArg (DP.lcs ∘ DPS.dp) aux0_nil
 
-theorem aux1_lcs {x : α} {as dps} (h : dps.dp.lcs = lcs1 as dps.ys) : lcs1.aux1 x dps = lcs1.aux0 (x::as) dps.ys :=
-  let bs := dps.ys
-  match dps with
-  | [] =>
-    calc lcs1.aux1 x []
-    _  = [] := rfl
-    _  = lcs1.aux0 (x::as) [] := sorry
-  | (y, xx)::(dps : DPS α) =>
-    let xx1 := lcs1 as (y::bs)
-    let yy1 := lcs1 (x::as) bs
-    let xy1 := lcs1 as bs
-    match e : dps.foldr (lcs1.aux2 x) ([], dp0, dp0) with
-    | (dps', yy, xy) =>
-      let dp := lcs1.aux3 x y xx yy xy
-      have hxy : xy.1 = xy1 := sorry
-      have hxx : xx.1 = xx1 := sorry
-      have hyy : yy.1 = yy1 := sorry
-      have :=
-        calc ((y, xx)::dps).foldr (lcs1.aux2 x) ([], dp0, dp0)
-        _  = lcs1.aux2 x (y, xx) (dps.foldr (lcs1.aux2 x) ([], dp0, dp0)) := rfl
-        _  = lcs1.aux2 x (y, xx) (dps', yy, xy) := congrArg _ e
-        _  = ((y, dp)::dps', _) := rfl
-        -- _  = ((y, dp)::lcs1.aux1 x dps, _, _) := sorry
-      calc lcs1.aux1 x ((y, xx)::dps)
-      _  = (((y, xx)::dps).foldr (lcs1.aux2 x) _).1 := rfl
-      _  = (y, dp)::dps' := congrArg (·.1) this
-      -- _  = DPS.lcs ((y, dp)::dps') := rfl
-      _  = (y, lcs1.aux3 x y xx yy xy)::dps' := rfl
-      -- _  = if x = y then x::xy.1 else DP.lcs _ := congr_ite DP.lcs
-      -- _  = if x = y then x::xy.1 else if xx.length ≥ yy.length then xx.1 else yy.1 := congrArg _ (congr_ite DP.lcs)
-      -- _  = if x = y then x::xy.1 else if xx.1.length ≥ yy.1.length then xx.1 else yy.1 := by rw [xx.length_eq, yy.length_eq]
-      -- _  = if x = y then x::xy1 else if xx1.length ≥ yy1.length then xx1 else yy1 := by rw [hxy, hxx, hyy]
-      _  = ((as.foldr lcs1.aux1 _).foldr (lcs1.aux2 x) ([], dp0, dp0)).1 := sorry
-      _  = lcs1.aux1 x (as.foldr lcs1.aux1 _) := rfl
-      _  = (x::as).foldr lcs1.aux1 (y::dps.ys).dps0 := rfl
-      _  = lcs1.aux0 (x::as) (y::dps.ys) := rfl -- (congr_ite Subtype.val).symm
-      _  = lcs1.aux0 (x::as) (DPS.ys ((y, xx)::dps)) := rfl
+def lcs0' : List α → List α → List α
+  | [], _
+  | _, [] => []
+  | x :: xs, y :: ys =>
+    if x = y then
+      x :: lcs0' xs ys
+    else
+      let xx := lcs0' xs (y :: ys)
+      let yy := lcs0' (x :: xs) ys
+      if xx.length ≥ yy.length then xx else yy
 
-theorem aux1_correct {x} {xs ys : List α} {dps : DPS α} (h : dps.dp.lcs = lcs1 xs ys) :
-    (lcs1.aux1 x dps).dp.lcs = lcs1 (x::xs) ys := sorry
+theorem nil_lcs0' {ys : List α} : lcs0' [] ys = [] :=
+  match ys with | [] | _ :: _ => by unfold lcs0' ; rfl
+theorem lcs0'_nil {xs : List α} : lcs0' xs [] = [] :=
+  match xs with | [] | _ :: _ => by unfold lcs0' ; rfl
 
-/-!
-theorem correct : {xs ys : List α} → lcs1 xs ys = lcs0 xs ys
-  | [], ys => sorry
-  | xs, [] => sorry
-  | x::as, ys =>
-    let dp0 : DP α := ⟨[], 0, rfl⟩
-    let dps0 := ys.map (·, dp0)
-    let init : DPS α × DP α × DP α := ([], dp0, dp0)
-    -- match e : dps.foldr (lcs1.aux2 x) init with
-    -- | (dps', yy, xy) =>
-    --   let dp := lcs1.aux3 x y xx yy xy
-    --   have :=
-    --     calc ((y, xx)::dps).foldr (lcs1.aux2 x) init
-    --     _  = lcs1.aux2 x (y, xx) (dps.foldr (lcs1.aux2 x) init) := rfl
-    --     _  = lcs1.aux2 x (y, xx) (dps', yy, xy) := congrArg _ e
-    --     _  = ((y, dp)::dps', _) := rfl
-    let dps := as.foldr lcs1.aux1 dps0
-    match e : dps with
-    | [] => sorry
-    | (y, xx)::dps' =>
-      match e' : dps'.foldr (lcs1.aux2 x) init with
-      | (dps'', yy, xy) =>
-        let dp := lcs1.aux3 x y xx yy xy
-        calc lcs1 (x::as) ys
-        _  = ((x::as).foldr lcs1.aux1 dps0).lcs := rfl
-        _  = (lcs1.aux1 x dps).lcs := rfl
-        _  = (dps.foldr (lcs1.aux2 x) init).1.lcs := rfl
-        _  = (lcs1.aux2 x (y, xx) (dps'.foldr (lcs1.aux2 x) init)).1.lcs := e ▸ rfl
-        _  = (lcs1.aux2 x (y, xx) (dps'', yy, xy)).1.lcs := e' ▸ rfl
-        _  = dp.lcs := rfl
-        _  = lcs0 (x::as) ys := sorry
--/
+-- theorem nil_lcs0_nil : lcs0 [] [] = @nil α := by unfold lcs0 ; unfold lcs0.aux ; rfl
 
-example {x y : α} {xx dps yy xy} : (lcs1.aux2 x (y, xx) (dps, yy, xy)).2 = (lcs1.aux3 x y xx yy xy, xx) := rfl
-example {x y : α} {xx dps yy xy} : (lcs1.aux2 x (y, xx) (dps, yy, xy)).1 = (y, lcs1.aux3 x y xx yy xy)::dps := rfl
+theorem lcs0_eq_lcs0' {xs ys : List α} : lcs0 xs ys = lcs0' xs ys :=
+  match xs, ys with
+  | [], ys => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; cases ys ; rfl ; rfl
+  | xs, [] => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; cases xs ; rfl ; rfl
+  | x :: xs, y :: ys => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; exact
+    if h₁ : x = y then
+      by { rw [if_pos h₁, apply_dite Subtype.val] ; simp [h₁] ; exact lcs0_eq_lcs0' }
+    else
+      let xx := lcs0.aux xs (y :: ys)
+      let xx' := lcs0' xs (y :: ys)
+      have hxx : xx.1 = xx' := lcs0_eq_lcs0'
+      let yy := lcs0.aux (x :: xs) ys
+      let yy' := lcs0' (x :: xs) ys
+      have hyy : yy.1 = yy' := lcs0_eq_lcs0'
+      by {
+        rw [if_neg h₁] ; simp [h₁]
+        calc
+        _  = if h : xx.1.length ≥ yy.1.length then xx.1 else yy.1 := apply_dite Subtype.val ..
+        _  = if h : xx'.length ≥ yy'.length then xx' else yy' := by rw [hxx, hyy]
+        _  = if xx'.length ≥ yy'.length then xx' else yy' := dite_eq_ite
+      }
 
-/-!
+theorem lcs1_eq_lcs0' {xs ys : List α} : lcs1 xs ys = lcs0' xs ys :=
+  match xs, ys with
+  | [], ys => nil_lcs1.trans nil_lcs0'.symm
+  | xs, [] => lcs1_nil.trans lcs0'_nil.symm
+  | x :: xs, y :: ys =>
+    let xx1 := lcs1.aux0 xs (y :: ys) |>.dp
+    let yy1 := lcs1.aux0 (x :: xs) ys |>.dp
+    let xy1 := lcs1.aux0 xs ys |>.dp
+
+    let xx0 := lcs0' xs (y :: ys)
+    let yy0 := lcs0' (x :: xs) ys
+    let xy0 := lcs0' xs ys
+
+    have hxx : xx1.lcs = xx0 := lcs1_eq_lcs0'
+    have hyy : yy1.lcs = yy0 := lcs1_eq_lcs0'
+    have hxy : xy1.lcs = xy0 := lcs1_eq_lcs0'
+
+    let e1 := if xx1.length ≥ yy1.length then xx1.lcs else yy1.lcs
+    let e0 := if xx0.length ≥ yy0.length then xx0 else yy0
+    have ee : e1 = e0 := by unfold e1 ; rw [←xx1.length_eq, ←yy1.length_eq, hxx, hyy]
+
+    calc lcs1 (x :: xs) (y :: ys)
+    _  = (lcs1.aux0 (x :: xs) (y :: ys)).dp.lcs := rfl
+    _  = (lcs1.aux3 x y xx1 yy1 xy1).lcs := congrArg (DP.lcs ∘ DPS.dp) aux0_rec
+    _  = if x = y then x :: xy1.lcs else DP.lcs _ := apply_ite DP.lcs ..
+    _  = if x = y then x :: xy1.lcs else e1 := congrArg _ (apply_ite DP.lcs ..)
+    _  = if x = y then x :: xy0 else e0 := by rw [hxy, ee]
+    _  = lcs0' (x :: xs) (y :: ys) := by unfold lcs0' ; rfl
+
 theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
-  let dps0 : DPS α := dps0 ys
-  have dps0_ys : dps0.ys = ys := dps0_ys
-  have dps0_lcs : dps0.dp.lcs = [] :=
-    match e : ys with
-    | [] => show DPS.dp.lcs (ys.map (·, dp0)) = DPS.lcs ([].map (·, dp0)) from e ▸ rfl
-    | y::bs => show DPS.lcs (ys.map (·, dp0)) = DPS.lcs ((y::bs).map (·, dp0)) from e ▸ rfl
-  have lcs0_nil : lcs0 [] ys = [] :=
-    match ys with | [] | y::bs => by unfold lcs0 ; unfold lcs0.aux ; rfl
-  match xs with
-  | [] =>
-    calc lcs1 [] ys
-    _  = ([].foldr lcs1.aux1 dps0).lcs := rfl
-    _  = dps0.lcs := congrArg _ foldr_nil
-    _  = [] := dps0_lcs
-    _  = lcs0 [] ys := lcs0_nil.symm
-  | x::as =>
-    let dps := as.foldr lcs1.aux1 dps0
-    have e :=
-      calc dps.ys
-      _  = dps0.ys := tt3
-      _  = ys := dps0_ys
-    have :=
-      calc dps.lcs
-      _  = (as.foldr lcs1.aux1 dps0).lcs := rfl
-      _  = lcs0 as ys := lcs1_eq_lcs0
-      _  = lcs0 as dps.ys := congrArg _ e.symm
-    calc ((x::as).foldr lcs1.aux1 dps0).lcs
-    _  = (lcs1.aux1 x dps).lcs := congrArg _ rfl
-    _  = lcs0 (x::as) dps.ys := tt4 this
-    _  = lcs0 (x::as) ys := congrArg _ e
-where
-  tt2 {x : α} {dps} : (lcs1.aux1 x dps).ys = dps.ys :=
-    match dps with
-    | [] => rfl
-    | (y, xx)::(dps : DPS α) =>
-      let dp0 : DP α := ⟨[], 0, rfl⟩
-      have :=
-        calc ((y, xx)::dps).foldr (lcs1.aux2 x) ([], dp0, dp0)
-        _  = lcs1.aux2 x (y, xx) (dps.foldr (lcs1.aux2 x) _) := rfl
-        _  = ((y, _)::lcs1.aux1 x dps, _, _) := rfl
-      calc ((y, xx)::dps).foldr (lcs1.aux2 x) _ |>.1.ys
-      _  = DPS.ys ((y, _)::lcs1.aux1 x dps) := congrArg (·.1.ys) this
-      _  = y::(lcs1.aux1 x dps).ys := rfl
-      _  = y::dps.ys := congrArg _ tt2
-      _  = DPS.ys ((y, xx)::dps) := rfl
-  tt3 {xs dps} : (xs.foldr lcs1.aux1 dps).ys = dps.ys :=
-    match xs with
-    | [] => rfl
-    | x::as =>
-      let dps' := as.foldr lcs1.aux1 dps
-      calc ((x::as).foldr lcs1.aux1 dps).ys
-      _  = (lcs1.aux1 x dps').ys := rfl
-      _  = dps'.ys := tt2
-      _  = dps.ys := tt3
-  tt4 {x : α} {as dps} (h : dps.lcs = lcs0 as dps.ys) : (lcs1.aux1 x dps).lcs = lcs0 (x::as) dps.ys :=
-    let bs := dps.ys
-    match dps with
-    | [] =>
-      calc (lcs1.aux1 x []).lcs
-      _  = [] := sorry
-      _  = lcs0 (x::as) [] := sorry
-    | (y, xx)::(dps : DPS α) =>
-      let xx0 := lcs0 as (y::bs)
-      let yy0 := lcs0 (x::as) bs
-      let xy0 := lcs0 as bs
-      let dp0 : DP α := ⟨[], 0, rfl⟩
-      match e : dps.foldr (lcs1.aux2 x) ([], dp0, dp0) with
-      | (dps', yy, xy) =>
-        let dp := lcs1.aux3 x y xx yy xy
-        have hxy : xy.1 = xy0 := sorry
-        have hxx : xx.1 = xx0 := sorry
-        have hyy : yy.1 = yy0 := sorry
-        have :=
-          calc ((y, xx)::dps).foldr (lcs1.aux2 x) ([], dp0, dp0)
-          _  = lcs1.aux2 x (y, xx) (dps.foldr (lcs1.aux2 x) ([], dp0, dp0)) := rfl
-          _  = lcs1.aux2 x (y, xx) (dps', yy, xy) := congrArg _ e
-          _  = ((y, dp)::dps', _) := rfl
-          -- _  = ((y, dp)::lcs1.aux1 x dps, _, _) := sorry
-        calc (lcs1.aux1 x ((y, xx)::dps)).lcs
-        _  = (((y, xx)::dps).foldr (lcs1.aux2 x) _).1.lcs := rfl
-        _  = dp.lcs := congrArg (·.1.lcs) this
-        -- _  = DPS.lcs ((y, dp)::dps') := rfl
-        _  = (lcs1.aux3 x y xx yy xy).lcs := rfl
-        _  = if x = y then x::xy.1 else DP.lcs _ := congr_ite DP.lcs
-        _  = if x = y then x::xy.1 else if xx.length ≥ yy.length then xx.1 else yy.1 := congrArg _ (congr_ite DP.lcs)
-        _  = if x = y then x::xy.1 else if xx.1.length ≥ yy.1.length then xx.1 else yy.1 := by rw [xx.length_eq, yy.length_eq]
-        _  = if x = y then x::xy0 else if xx0.length ≥ yy0.length then xx0 else yy0 := by rw [hxy, hxx, hyy]
-        _  = lcs0 (x::as) (y::dps.ys) := sorry -- (congr_ite Subtype.val).symm
-        _  = lcs0 (x::as) (DPS.ys ((y, xx)::dps)) := rfl
--/
-theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys := sorry
+  lcs1_eq_lcs0'.trans lcs0_eq_lcs0'.symm
 
 theorem lcs1_LCS {xs ys : List α} : LCS xs ys (lcs1 xs ys) := lcs1_eq_lcs0.symm.rec lcs0_LCS
 
