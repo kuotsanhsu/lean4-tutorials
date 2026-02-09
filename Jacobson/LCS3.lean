@@ -9,8 +9,8 @@ what it means for a common sublist of two lists to be the longest.
 I provide 3 implementations of the LCS algorithm. Their unit tests take the form of
 `#guard_msgs in #eval`. Currently, I prove the correctness of the slow recursive implementation,
 i.e. the theorem `lcs0_LCS`. To prove the correctness of `lcs1_LCS` and `lcs2_LCS`, it suffices to
-prove the functional equality between `lcs0`, `lcs1`, `lcs2` which are captured by the two unproven
-theorems: `lcs1_eq_lcs0` and `lcs2_eq_lcs1`; nowhere else is `sorry` to be seen.
+prove the functional equality between `lcs0`, `lcs1`, `lcs2` which are captured by the theorems:
+`lcs1_eq_lcs0` and `lcs2_eq_lcs1`. Only `lcs2_eq_lcs1` remains to be proved.
 
 -/
 
