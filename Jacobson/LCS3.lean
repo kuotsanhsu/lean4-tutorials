@@ -141,7 +141,7 @@ theorem lcs0_LCS {xs ys : List α} : LCS xs ys (lcs0 xs ys) :=
 /-- info: "MJAU" -/ #guard_msgs(info) in #eval String.mk <| lcs0 "XMJYAUZ".toList "MZJAWXU".toList
 
 /-!
-## Dynamic programming taking quadratic time and space (list of list)
+## Dynamic programming taking quadratic time and quadratic space (list of list)
 -/
 
 structure DP α where
@@ -155,7 +155,7 @@ def DPS.ys : DPS α → List α := map Prod.fst
 def DPS.dp : DPS α → DP α | [] => dp0 | (_, dp)::_ => dp
 abbrev dps0 (ys : List α) : DPS α := ys.map (·, dp0)
 
-/-- Quadratic space dynamic programming. -/
+/-- Quadratic time and quadratic space dynamic programming. -/
 def lcs1 (xs ys : List α) : List α := aux0.dp.lcs
 where
   aux0 : DPS α := xs.foldr aux1 ys.dps0
@@ -294,7 +294,7 @@ theorem lcs1_LCS {xs ys : List α} : LCS xs ys (lcs1 xs ys) := lcs1_eq_lcs0.symm
 ## Dynamic programming taking quadratic time and backtracking space (mutable vector)
 -/
 
-/-- Linear space dynamic programming. -/
+/-- Quadratic time and backtracking space dynamic programming. -/
 def lcs2 (xs ys : List α) : List α := Id.run do
   if ys.isEmpty then
     return []
