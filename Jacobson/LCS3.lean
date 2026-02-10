@@ -29,79 +29,109 @@ structure LCS (xs ys lcs : List α) : Prop extends CommonSublist xs ys lcs where
 -/
 
 /-- Slow recursive. -/
-def lcs0 (xs ys : List α) : List α := aux xs ys
-where aux : (xs ys : List α) → Subtype (LCS xs ys)
+def lcs0 : List α → List α → List α
+  | [], _
+  | _, [] => []
+  | x :: xs, y :: ys =>
+    if x = y then
+      x :: lcs0 xs ys
+    else
+      let xx := lcs0 xs (y :: ys)
+      let yy := lcs0 (x :: xs) ys
+      if xx.length ≥ yy.length then xx else yy
+
+theorem nil_lcs0 : {ys : List α} → lcs0 [] ys = [] | [] | _ :: _ => by unfold lcs0 ; rfl
+theorem lcs0_nil : {xs : List α} → lcs0 xs [] = [] | [] | _ :: _ => by unfold lcs0 ; rfl
+
+theorem lcs0_LCS {xs ys : List α} : LCS xs ys (lcs0 xs ys) :=
+  match xs, ys with
   | [], ys =>
+    show LCS [] ys (lcs0 [] ys) from
+    suffices LCS [] ys [] by rw [nil_lcs0] ; exact this
     {
-      val := []
-      property.sublist₁ := .slnil
-      property.sublist₂ := ys.nil_sublist
-      property.longest | _, ⟨h, _⟩ => eq_nil_of_sublist_nil h ▸ Nat.le.refl
+      sublist₁ := show [] <+ [] from .slnil
+      sublist₂ := show [] <+ ys from ys.nil_sublist
+      longest
+      | cs, ⟨(h : cs <+ []), _⟩ =>
+        show cs.length ≤ [].length from
+        suffices cs = [] from this.rec Nat.le.refl
+        eq_nil_of_sublist_nil h
     }
   | xs, [] =>
+    show LCS xs [] (lcs0 xs []) from
+    suffices LCS xs [] [] by rw [lcs0_nil] ; exact this
     {
-      val := []
-      property.sublist₁ := xs.nil_sublist
-      property.sublist₂ := .slnil
-      property.longest | _, ⟨_, h⟩ => eq_nil_of_sublist_nil h ▸ Nat.le.refl
+      sublist₁ := show [] <+ xs from xs.nil_sublist
+      sublist₂ := show [] <+ [] from .slnil
+      longest
+      | cs, ⟨_, (h : cs <+ [])⟩ =>
+        show cs.length ≤ [].length from
+        suffices cs = [] from this.rec Nat.le.refl
+        eq_nil_of_sublist_nil h
     }
-  | x::as, y::bs =>
+  | x :: xs, y :: ys =>
     if h₁ : x = y then
-      let xy := aux as bs
+      let xy := lcs0 xs ys ; have hxy : LCS xs ys xy := lcs0_LCS
+      have h : lcs0 (x :: xs) (y :: ys) = x :: xy := by unfold lcs0 ; exact if_pos h₁
+      show LCS (x :: xs) (y :: ys) (lcs0 (x :: xs) (y :: ys)) from
+      suffices LCS (x :: xs) (y :: ys) (x :: xy) from h ▸ this
       {
-        val := x::xy
-        property.sublist₁ := show x::xy <+ x::as from xy.2.sublist₁.cons₂ x
-        property.sublist₂ := show x::xy <+ y::bs from h₁ ▸ xy.2.sublist₂.cons₂ x
-        property.longest
-          | [], _ => show [].length ≤ _ from Nat.zero_le _
-          | _::cs, ⟨ha, hb⟩ =>
-            show (_::cs).length ≤ (_::xy.1).length from
-            suffices cs.length ≤ xy.1.length from Nat.succ_le_succ this
-            xy.2.longest cs ⟨ha.of_cons_cons, hb.of_cons_cons⟩
+        sublist₁ := show x :: xy <+ x :: xs from hxy.sublist₁.cons₂ x
+        sublist₂ := show x :: xy <+ y :: ys from h₁ ▸ hxy.sublist₂.cons₂ y
+        longest
+        | [], _ => show [].length ≤ _ from Nat.zero_le _
+        | c :: cs, ⟨(hx : c :: cs <+ x :: xs), (hy : c :: cs <+ y :: ys)⟩ =>
+          show (c :: cs).length ≤ (x :: xy).length from
+          suffices cs.length ≤ xy.length from Nat.succ_le_succ this
+          hxy.longest cs ⟨hx.of_cons_cons, hy.of_cons_cons⟩
       }
     else
-      let xx := aux as (y::bs)
-      let yy := aux (x::as) bs
-      if h₂ : xx.1.length ≥ yy.1.length then
+      let xx := lcs0 xs (y :: ys) ; have hxx : LCS xs (y :: ys) xx := lcs0_LCS
+      let yy := lcs0 (x :: xs) ys ; have hyy : LCS (x :: xs) ys yy := lcs0_LCS
+      if h₂ : xx.length ≥ yy.length then
+        have h : lcs0 (x :: xs) (y :: ys) = xx := by unfold lcs0 ; rw [if_neg h₁, if_pos h₂]
+        show LCS (x :: xs) (y :: ys) (lcs0 (x :: xs) (y :: ys)) from
+        suffices LCS (x :: xs) (y :: ys) xx from h ▸ this
         {
-          xx with
-          property.sublist₁ := show xx <+ x::as from xx.2.sublist₁.cons x
-          property.longest
-            | cs, ⟨(ha : cs <+ x::as), (hb : cs <+ y::bs)⟩ =>
-              match sublist_cons_iff.mp ha with
-              | .inl (h : cs <+ as) => show cs.length ≤ xx.1.length from xx.2.longest cs ⟨h, hb⟩
-              | .inr ⟨_, (h : cs = x::_), _⟩ =>
-                have : cs <+ bs :=
-                  match sublist_cons_iff.mp hb with
-                  | .inl h => h
-                  | .inr ⟨_, (e : cs = y::_), _⟩ =>
-                    suffices x = y from absurd this h₁
-                    cons.inj (h.symm.trans e) |>.1
-                calc cs.length
-                _  ≤ yy.1.length := yy.2.longest cs ⟨ha, this⟩
-                _  ≤ xx.1.length := h₂
+          hxx with
+          sublist₁ := show xx <+ x :: xs from hxx.sublist₁.cons x
+          longest
+          | cs, ⟨(hx : cs <+ x :: xs), (hy : cs <+ y :: ys)⟩ =>
+            match sublist_cons_iff.mp hx with
+            | .inl (h : cs <+ xs) => show cs.length ≤ xx.length from hxx.longest cs ⟨h, hy⟩
+            | .inr ⟨_, (h : cs = x :: _), _⟩ =>
+              have : cs <+ ys :=
+                match sublist_cons_iff.mp hy with
+                | .inl h => h
+                | .inr ⟨_, (e : cs = y :: _), _⟩ =>
+                  suffices x = y from absurd this h₁
+                  cons.inj (h.symm.trans e) |>.1
+              calc cs.length
+              _  ≤ yy.length := hyy.longest cs ⟨hx, this⟩
+              _  ≤ xx.length := h₂
         }
       else
+        have h : lcs0 (x :: xs) (y :: ys) = yy := by unfold lcs0 ; rw [if_neg h₁, if_neg h₂]
+        show LCS (x :: xs) (y :: ys) (lcs0 (x :: xs) (y :: ys)) from
+        suffices LCS (x :: xs) (y :: ys) yy from h ▸ this
         {
-          yy with
-          property.sublist₂ := show yy <+ y::bs from yy.2.sublist₂.cons y
-          property.longest
-            | cs, ⟨(ha : cs <+ x::as), (hb : cs <+ y::bs)⟩ =>
-              match sublist_cons_iff.mp hb with
-              | .inl (h : cs <+ bs) => show cs.length ≤ yy.1.length from yy.2.longest cs ⟨ha, h⟩
-              | .inr ⟨_, (h : cs = y::_), _⟩ =>
-                have : cs <+ as :=
-                  match sublist_cons_iff.mp ha with
-                  | .inl h => h
-                  | .inr ⟨_, (e : cs = x::_), _⟩ =>
-                    suffices x = y from absurd this h₁
-                    cons.inj (e.symm.trans h) |>.1
-                calc cs.length
-                _  ≤ xx.1.length := xx.2.longest cs ⟨this, hb⟩
-                _  ≤ yy.1.length := Nat.le_of_not_ge h₂
+          hyy with
+          sublist₂ := show yy <+ y :: ys from hyy.sublist₂.cons y
+          longest
+          | cs, ⟨(hx : cs <+ x :: xs), (hy : cs <+ y :: ys)⟩ =>
+            match sublist_cons_iff.mp hy with
+            | .inl (h : cs <+ ys) => show cs.length ≤ yy.length from hyy.longest cs ⟨hx, h⟩
+            | .inr ⟨_, (h : cs = y :: _), _⟩ =>
+              have : cs <+ xs :=
+                match sublist_cons_iff.mp hx with
+                | .inl h => h
+                | .inr ⟨_, (e : cs = x :: _), _⟩ =>
+                  suffices x = y from absurd this h₁
+                  cons.inj (e.symm.trans h) |>.1
+              calc cs.length
+              _  ≤ xx.length := hxx.longest cs ⟨this, hy⟩
+              _  ≤ yy.length := Nat.le_of_not_ge h₂
         }
-
-theorem lcs0_LCS {xs ys : List α} : LCS xs ys (lcs0 xs ys) := (lcs0.aux xs ys).property
 
 /-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs0 [] []
 /-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs0 "ABCD".toList []
@@ -118,15 +148,11 @@ structure DP α where
   lcs : List α
   length : Nat
   length_eq : lcs.length = length
-
 abbrev dp0 : DP α := ⟨[], 0, rfl⟩
 
 abbrev DPS α := List (α × DP α)
 def DPS.ys : DPS α → List α := map Prod.fst
-def DPS.dp : DPS α → DP α
-  | [] => dp0
-  | (_, dp)::_ => dp
-
+def DPS.dp : DPS α → DP α | [] => dp0 | (_, dp)::_ => dp
 abbrev dps0 (ys : List α) : DPS α := ys.map (·, dp0)
 
 /-- Quadratic space dynamic programming. -/
@@ -134,16 +160,11 @@ def lcs1 (xs ys : List α) : List α := aux0.dp.lcs
 where
   aux0 : DPS α := xs.foldr aux1 ys.dps0
   aux1 (x : α) (dps : DPS α) : DPS α := (aux2 x dps).1
-  aux2 (x : α) (dps : DPS α) : DPS α × DP α × DP α :=
-    dps.foldr (aux3 x) ([], dp0, dp0)
+  aux2 (x : α) (dps : DPS α) : DPS α × DP α × DP α := dps.foldr (aux3 x) ([], dp0, dp0)
   aux3 (x : α) : α × DP α → DPS α × DP α × DP α → DPS α × DP α × DP α
-    | (y, xx), (dps, yy, xy) =>
-      let dp := aux4 x y xx yy xy
-      ((y, dp) :: dps, dp, xx)
+    | (y, xx), (dps, yy, xy) => let dp := aux4 x y xx yy xy ; ((y, dp) :: dps, dp, xx)
   aux4 (x y : α) (xx yy xy : DP α) : DP α :=
-    if x = y then
-      ⟨x :: xy.1, xy.2 + 1, xy.length_eq.rec rfl⟩
-    else if xx.2 ≥ yy.2 then xx else yy
+    if x = y then ⟨x :: xy.1, xy.2 + 1, xy.length_eq.rec rfl⟩ else if xx.2 ≥ yy.2 then xx else yy
 
 /-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs1 [] []
 /-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs1 "ABCD".toList []
@@ -238,58 +259,22 @@ end
 theorem nil_lcs1 {ys : List α} : lcs1 [] ys = [] := ys.casesOn rfl fun _ _ => rfl
 theorem lcs1_nil {xs : List α} : lcs1 xs [] = [] := congrArg (DP.lcs ∘ DPS.dp) aux0_nil
 
-def lcs0' : List α → List α → List α
-  | [], _
-  | _, [] => []
-  | x :: xs, y :: ys =>
-    if x = y then
-      x :: lcs0' xs ys
-    else
-      let xx := lcs0' xs (y :: ys)
-      let yy := lcs0' (x :: xs) ys
-      if xx.length ≥ yy.length then xx else yy
-
-theorem nil_lcs0' : {ys : List α} → lcs0' [] ys = [] | [] | _ :: _ => by unfold lcs0' ; rfl
-theorem lcs0'_nil : {xs : List α} → lcs0' xs [] = [] | [] | _ :: _ => by unfold lcs0' ; rfl
-
-theorem lcs0_eq_lcs0' {xs ys : List α} : lcs0 xs ys = lcs0' xs ys :=
+theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
   match xs, ys with
-  | [], ys => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; cases ys ; rfl ; rfl
-  | xs, [] => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; cases xs ; rfl ; rfl
-  | x :: xs, y :: ys => by unfold lcs0 ; unfold lcs0.aux ; unfold lcs0' ; exact
-    if h₁ : x = y then
-      by { rw [if_pos h₁, apply_dite Subtype.val] ; simp [h₁] ; exact lcs0_eq_lcs0' }
-    else
-      let xx := lcs0.aux xs (y :: ys)
-      let xx' := lcs0' xs (y :: ys)
-      have hxx : xx.1 = xx' := lcs0_eq_lcs0'
-      let yy := lcs0.aux (x :: xs) ys
-      let yy' := lcs0' (x :: xs) ys
-      have hyy : yy.1 = yy' := lcs0_eq_lcs0'
-      by {
-        rw [if_neg h₁] ; simp [h₁]
-        calc
-        _  = if h : xx.1.length ≥ yy.1.length then xx.1 else yy.1 := apply_dite Subtype.val ..
-        _  = if h : xx'.length ≥ yy'.length then xx' else yy' := by rw [hxx, hyy]
-        _  = if xx'.length ≥ yy'.length then xx' else yy' := dite_eq_ite
-      }
-
-theorem lcs1_eq_lcs0' {xs ys : List α} : lcs1 xs ys = lcs0' xs ys :=
-  match xs, ys with
-  | [], ys => nil_lcs1.trans nil_lcs0'.symm
-  | xs, [] => lcs1_nil.trans lcs0'_nil.symm
+  | [], ys => nil_lcs1.trans nil_lcs0.symm
+  | xs, [] => lcs1_nil.trans lcs0_nil.symm
   | x :: xs, y :: ys =>
     let xx1 := lcs1.aux0 xs (y :: ys) |>.dp
     let yy1 := lcs1.aux0 (x :: xs) ys |>.dp
     let xy1 := lcs1.aux0 xs ys |>.dp
 
-    let xx0 := lcs0' xs (y :: ys)
-    let yy0 := lcs0' (x :: xs) ys
-    let xy0 := lcs0' xs ys
+    let xx0 := lcs0 xs (y :: ys)
+    let yy0 := lcs0 (x :: xs) ys
+    let xy0 := lcs0 xs ys
 
-    have hxx : xx1.lcs = xx0 := lcs1_eq_lcs0'
-    have hyy : yy1.lcs = yy0 := lcs1_eq_lcs0'
-    have hxy : xy1.lcs = xy0 := lcs1_eq_lcs0'
+    have hxx : xx1.lcs = xx0 := lcs1_eq_lcs0
+    have hyy : yy1.lcs = yy0 := lcs1_eq_lcs0
+    have hxy : xy1.lcs = xy0 := lcs1_eq_lcs0
 
     let e1 := if xx1.length ≥ yy1.length then xx1.lcs else yy1.lcs
     let e0 := if xx0.length ≥ yy0.length then xx0 else yy0
@@ -301,9 +286,7 @@ theorem lcs1_eq_lcs0' {xs ys : List α} : lcs1 xs ys = lcs0' xs ys :=
     _  = if x = y then x :: xy1.lcs else DP.lcs _ := apply_ite DP.lcs ..
     _  = if x = y then x :: xy1.lcs else e1 := congrArg _ (apply_ite DP.lcs ..)
     _  = if x = y then x :: xy0 else e0 := by rw [hxy, ee]
-    _  = lcs0' (x :: xs) (y :: ys) := by unfold lcs0' ; rfl
-
-theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys := lcs1_eq_lcs0'.trans lcs0_eq_lcs0'.symm
+    _  = lcs0 (x :: xs) (y :: ys) := by unfold lcs0 ; rfl
 
 theorem lcs1_LCS {xs ys : List α} : LCS xs ys (lcs1 xs ys) := lcs1_eq_lcs0.symm.rec lcs0_LCS
 
