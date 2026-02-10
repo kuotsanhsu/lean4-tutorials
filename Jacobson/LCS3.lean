@@ -32,7 +32,7 @@ abbrev test_string (lcs : List Char → List Char → List Char) : String → St
 -/
 
 /-- Slow recursive. -/
-def lcs0 : List α → List α → List α
+@[reducible] def lcs0 : List α → List α → List α
   | [], _
   | _, [] => []
   | x :: xs, y :: ys =>
@@ -52,8 +52,12 @@ section unittest
 /-- info: "MJAU" -/ #guard_msgs(info) in #eval test_string lcs0 "XMJYAUZ" "MZJAWXU"
 end unittest
 
-theorem nil_lcs0 : {ys : List α} → lcs0 [] ys = [] | [] | _ :: _ => by unfold lcs0 ; rfl
-theorem lcs0_nil : {xs : List α} → lcs0 xs [] = [] | [] | _ :: _ => by unfold lcs0 ; rfl
+theorem nil_lcs0 : {ys : List α} → lcs0 [] ys = []
+  | [] => rfl
+  | _ :: _ => by unfold lcs0 ; rfl
+theorem lcs0_nil : {xs : List α} → lcs0 xs [] = []
+  | [] => rfl
+  | _ :: _ => by unfold lcs0 ; rfl
 
 theorem lcs0_LCS : {xs ys : List α} → LCS xs ys (lcs0 xs ys)
   | [], ys =>
@@ -157,7 +161,7 @@ structure DP α where
 
 def dp0 : DP α := ⟨[], 0, rfl⟩
 def DPS α := List (α × DP α)
-def DPS.dp : DPS α → DP α | [] => dp0 | (_, dp) :: _ => dp
+abbrev DPS.dp : DPS α → DP α | [] => dp0 | (_, dp) :: _ => dp
 def dps0 : List α → DPS α := map (·, dp0)
 
 end lcs1
@@ -187,8 +191,9 @@ section unittest
 end unittest
 
 namespace lcs1
+variable {x y : α} {xs ys : List α}
 
-example {x : α} {xs ys : List α} :=
+example :=
   calc aux0 (x :: xs) ys
   _  = (x :: xs).foldr aux1 (dps0 ys) := rfl
   _  = aux1 x (xs.foldr aux1 (dps0 ys)) := rfl
@@ -202,9 +207,7 @@ theorem aux0_nil : {xs : List α} → aux0 xs [] = []
     _  = aux1 x [] := congrArg (aux1 x) aux0_nil
     _  = [] := rfl
 
-theorem aux0_cons {y : α} {xs ys : List α} :
-    aux0 xs (y :: ys) = (y, (aux0 xs (y :: ys)).dp) :: aux0 xs ys :=
-  match xs with
+theorem aux0_cons : {xs : List α} → aux0 xs (y :: ys) = (y, (aux0 xs (y :: ys)).dp) :: aux0 xs ys
   | [] => rfl
   | x :: xs =>
     let xx := aux0 xs (y :: ys) |>.dp
@@ -221,16 +224,30 @@ theorem aux0_cons {y : α} {xs ys : List α} :
     _  = (y, eq) :: aux0 (x :: xs) ys := h
     _  = (y, dp) :: aux0 (x :: xs) ys := this.rec rfl
 
-mutual
-theorem aux4_rec {x : α} {xs ys : List α} :
-    aux2 x (aux0 xs ys) = (aux0 (x :: xs) ys, (aux0 (x :: xs) ys).dp, (aux0 xs ys).dp) :=
-  match ys with
+theorem aux0_def {y : α} {ys : List α} : aux0 (x :: xs) (y :: ys) =
+    (y, aux4 x y (aux0 xs (y :: ys)).dp (aux0 (x :: xs) ys).dp (aux0 xs ys).dp) :: aux0 (x :: xs) ys :=
+  let xx := aux0 xs (y :: ys) |>.dp
+  let yy := aux0 (x :: xs) ys |>.dp
+  let xy := aux0 xs ys |>.dp
+  let dp := aux4 x y xx yy xy
+  let pp := aux2 x (aux0 xs ys) |>.2
+  let eq := aux4 x y xx pp.1 pp.2
+  have : eq = dp :=
+    have : pp = (yy, xy) := congrArg Prod.snd lem
+    have h₁ : pp.1 = yy := congrArg Prod.fst this
+    have h₂ : pp.2 = xy := congrArg Prod.snd this
+    show aux4 x y xx pp.1 pp.2 = aux4 x y xx yy xy by rw [h₁, h₂]
+  calc aux0 (x :: xs) (y :: ys)
+  _  = aux1 x (aux0 xs (y :: ys)) := rfl
+  _  = aux1 x ((y, xx) :: aux0 xs ys) := congrArg (aux1 x) aux0_cons
+  _  = (y, eq) :: aux0 (x :: xs) ys := rfl
+  _  = (y, dp) :: aux0 (x :: xs) ys := this.rec rfl
+where lem : ∀ {ys}, aux2 x (aux0 xs ys) = (aux0 (x :: xs) ys, (aux0 (x :: xs) ys).dp, (aux0 xs ys).dp)
   | [] =>
     calc aux2 x (aux0 xs [])
     _  = aux2 x [] := congrArg _ aux0_nil
     _  = ([], dp0, dp0) := rfl
-    _  = (aux0 (x :: xs) [], (aux0 (x :: xs) []).dp, (aux0 xs []).dp) :=
-      by rw [aux0_nil, aux0_nil] ; rfl
+    _  = (aux0 (x :: xs) [], (aux0 (x :: xs) []).dp, (aux0 xs []).dp) := by rw [aux0_nil, aux0_nil]
   | y :: ys =>
     let zz := aux0 (x :: xs) (y :: ys) |>.dp
     let xx := aux0 xs (y :: ys) |>.dp
@@ -245,30 +262,9 @@ theorem aux4_rec {x : α} {xs ys : List α} :
     calc aux2 x (aux0 xs (y :: ys))
     _  = aux2 x ((y, xx) :: aux0 xs ys) := congrArg _ aux0_cons
     _  = aux3 x (y, xx) (aux2 x (aux0 xs ys)) := rfl
-    _  = aux3 x (y, xx) (dps, yy, xy) := congrArg _ aux4_rec
+    _  = aux3 x (y, xx) (dps, yy, xy) := congrArg _ lem
     _  = ((y, dp) :: dps, dp, xx) := rfl
     _  = (aux0 (x :: xs) (y :: ys), zz, xx) := by rw [h₁, h₂]
-
-theorem aux0_def {x y : α} {xs ys : List α} :
-    aux0 (x :: xs) (y :: ys) =
-    (y, aux4 x y (aux0 xs (y :: ys)).dp (aux0 (x :: xs) ys).dp (aux0 xs ys).dp) :: aux0 (x :: xs) ys :=
-  let xx := aux0 xs (y :: ys) |>.dp
-  let yy := aux0 (x :: xs) ys |>.dp
-  let xy := aux0 xs ys |>.dp
-  let dp := aux4 x y xx yy xy
-  let pp := aux2 x (aux0 xs ys) |>.2
-  let eq := aux4 x y xx pp.1 pp.2
-  have : eq = dp :=
-    have : pp = (yy, xy) := congrArg Prod.snd aux4_rec
-    have h₁ : pp.1 = yy := congrArg Prod.fst this
-    have h₂ : pp.2 = xy := congrArg Prod.snd this
-    show aux4 x y xx pp.1 pp.2 = aux4 x y xx yy xy by rw [h₁, h₂]
-  calc aux0 (x :: xs) (y :: ys)
-  _  = aux1 x (aux0 xs (y :: ys)) := rfl
-  _  = aux1 x ((y, xx) :: aux0 xs ys) := congrArg (aux1 x) aux0_cons
-  _  = (y, eq) :: aux0 (x :: xs) ys := rfl
-  _  = (y, dp) :: aux0 (x :: xs) ys := this.rec rfl
-end
 
 end lcs1
 
@@ -278,8 +274,7 @@ open lcs1
 theorem nil_lcs1 {ys : List α} : lcs1 [] ys = [] := ys.casesOn rfl fun _ _ => rfl
 theorem lcs1_nil {xs : List α} : lcs1 xs [] = [] := congrArg (DP.lcs ∘ DPS.dp) aux0_nil
 
-theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
-  match xs, ys with
+theorem lcs1_eq_lcs0 : {xs ys : List α} → lcs1 xs ys = lcs0 xs ys
   | [], ys => nil_lcs1.trans nil_lcs0.symm
   | xs, [] => lcs1_nil.trans lcs0_nil.symm
   | x :: xs, y :: ys =>
@@ -297,14 +292,14 @@ theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
 
     let e1 := if xx1.length ≥ yy1.length then xx1.lcs else yy1.lcs
     let e0 := if xx0.length ≥ yy0.length then xx0 else yy0
-    have ee : e1 = e0 := by unfold e1 ; rw [←xx1.length_eq, ←yy1.length_eq, hxx, hyy]
+    have he : e1 = e0 := by unfold e1 ; rw [←xx1.length_eq, ←yy1.length_eq, hxx, hyy]
 
     calc lcs1 (x :: xs) (y :: ys)
     _  = (aux0 (x :: xs) (y :: ys)).dp.lcs := rfl
     _  = (aux4 x y xx1 yy1 xy1).lcs := congrArg (DP.lcs ∘ DPS.dp) aux0_def
     _  = if x = y then x :: xy1.lcs else DP.lcs _ := apply_ite DP.lcs ..
     _  = if x = y then x :: xy1.lcs else e1 := congrArg _ (apply_ite DP.lcs ..)
-    _  = if x = y then x :: xy0 else e0 := by rw [hxy, ee]
+    _  = if x = y then x :: xy0 else e0 := by rw [hxy, he]
     _  = lcs0 (x :: xs) (y :: ys) := by unfold lcs0 ; rfl
 
 end
