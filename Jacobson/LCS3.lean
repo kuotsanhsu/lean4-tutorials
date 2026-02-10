@@ -24,6 +24,9 @@ structure CommonSublist (xs ys cs : List α) : Prop where
 structure LCS (xs ys lcs : List α) : Prop extends CommonSublist xs ys lcs where
   longest : ∀ cs, CommonSublist xs ys cs → cs.length ≤ lcs.length
 
+abbrev test_string (lcs : List Char → List Char → List Char) : String → String → String
+  | ⟨xs⟩, ⟨ys⟩ => ⟨lcs xs ys⟩
+
 /-!
 ## Straightforward recursion but slow
 -/
@@ -40,11 +43,19 @@ def lcs0 : List α → List α → List α
       let yy := lcs0 (x :: xs) ys
       if xx.length ≥ yy.length then xx else yy
 
+section unittest
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs0 ""        ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs0 "ABCD"    ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs0 ""        "ACBAD"
+/-- info: "ACD"  -/ #guard_msgs(info) in #eval test_string lcs0 "ABCD"    "ACBAD"
+/-- info: "AC"   -/ #guard_msgs(info) in #eval test_string lcs0 "GAC"     "AGCAT"
+/-- info: "MJAU" -/ #guard_msgs(info) in #eval test_string lcs0 "XMJYAUZ" "MZJAWXU"
+end unittest
+
 theorem nil_lcs0 : {ys : List α} → lcs0 [] ys = [] | [] | _ :: _ => by unfold lcs0 ; rfl
 theorem lcs0_nil : {xs : List α} → lcs0 xs [] = [] | [] | _ :: _ => by unfold lcs0 ; rfl
 
-theorem lcs0_LCS {xs ys : List α} : LCS xs ys (lcs0 xs ys) :=
-  match xs, ys with
+theorem lcs0_LCS : {xs ys : List α} → LCS xs ys (lcs0 xs ys)
   | [], ys =>
     show LCS [] ys (lcs0 [] ys) from
     suffices LCS [] ys [] by rw [nil_lcs0] ; exact this
@@ -133,128 +144,136 @@ theorem lcs0_LCS {xs ys : List α} : LCS xs ys (lcs0 xs ys) :=
               _  ≤ yy.length := Nat.le_of_not_ge h₂
         }
 
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs0 [] []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs0 "ABCD".toList []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs0 [] "ACBAD".toList
-/-- info: "ACD"  -/ #guard_msgs(info) in #eval String.mk <| lcs0 "ABCD".toList "ACBAD".toList
-/-- info: "AC"   -/ #guard_msgs(info) in #eval String.mk <| lcs0 "GAC".toList "AGCAT".toList
-/-- info: "MJAU" -/ #guard_msgs(info) in #eval String.mk <| lcs0 "XMJYAUZ".toList "MZJAWXU".toList
-
 /-!
 ## Dynamic programming taking quadratic time and quadratic space (list of list)
 -/
+
+namespace lcs1
 
 structure DP α where
   lcs : List α
   length : Nat
   length_eq : lcs.length = length
-abbrev dp0 : DP α := ⟨[], 0, rfl⟩
 
-abbrev DPS α := List (α × DP α)
-def DPS.ys : DPS α → List α := map Prod.fst
-def DPS.dp : DPS α → DP α | [] => dp0 | (_, dp)::_ => dp
-abbrev dps0 (ys : List α) : DPS α := ys.map (·, dp0)
+def dp0 : DP α := ⟨[], 0, rfl⟩
+def DPS α := List (α × DP α)
+def DPS.dp : DPS α → DP α | [] => dp0 | (_, dp) :: _ => dp
+def dps0 : List α → DPS α := map (·, dp0)
 
+end lcs1
+
+open lcs1 in
 /-- Quadratic time and quadratic space dynamic programming. -/
 def lcs1 (xs ys : List α) : List α := aux0.dp.lcs
 where
-  aux0 : DPS α := xs.foldr aux1 ys.dps0
+  aux0 : DPS α := xs.foldr aux1 (dps0 ys)
   aux1 (x : α) (dps : DPS α) : DPS α := (aux2 x dps).1
   aux2 (x : α) (dps : DPS α) : DPS α × DP α × DP α := dps.foldr (aux3 x) ([], dp0, dp0)
   aux3 (x : α) : α × DP α → DPS α × DP α × DP α → DPS α × DP α × DP α
     | (y, xx), (dps, yy, xy) => let dp := aux4 x y xx yy xy ; ((y, dp) :: dps, dp, xx)
   aux4 (x y : α) (xx yy xy : DP α) : DP α :=
-    if x = y then ⟨x :: xy.1, xy.2 + 1, xy.length_eq.rec rfl⟩ else if xx.2 ≥ yy.2 then xx else yy
+    if x = y then
+      ⟨x :: xy.lcs, xy.length + 1, xy.length_eq.rec rfl⟩
+    else
+      if xx.length ≥ yy.length then xx else yy
 
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs1 [] []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs1 "ABCD".toList []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs1 [] "ACBAD".toList
-/-- info: "ACD"  -/ #guard_msgs(info) in #eval String.mk <| lcs1 "ABCD".toList "ACBAD".toList
-/-- info: "AC"   -/ #guard_msgs(info) in #eval String.mk <| lcs1 "GAC".toList "AGCAT".toList
-/-- info: "MJAU" -/ #guard_msgs(info) in #eval String.mk <| lcs1 "XMJYAUZ".toList "MZJAWXU".toList
+section unittest
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs1 ""        ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs1 "ABCD"    ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs1 ""        "ACBAD"
+/-- info: "ACD"  -/ #guard_msgs(info) in #eval test_string lcs1 "ABCD"    "ACBAD"
+/-- info: "AC"   -/ #guard_msgs(info) in #eval test_string lcs1 "GAC"     "AGCAT"
+/-- info: "MJAU" -/ #guard_msgs(info) in #eval test_string lcs1 "XMJYAUZ" "MZJAWXU"
+end unittest
 
-theorem aux0_ex {y : α} {xs ys : List α} :
-    lcs1.aux0 xs (y :: ys) = (y, (lcs1.aux0 xs (y :: ys)).dp) :: lcs1.aux0 xs ys :=
-  match xs with
+namespace lcs1
+
+example {x : α} {xs ys : List α} :=
+  calc aux0 (x :: xs) ys
+  _  = (x :: xs).foldr aux1 (dps0 ys) := rfl
+  _  = aux1 x (xs.foldr aux1 (dps0 ys)) := rfl
+  _  = aux1 x (aux0 xs ys) := rfl
+
+theorem aux0_nil : {xs : List α} → aux0 xs [] = []
   | [] => rfl
   | x :: xs =>
-    let xx := lcs1.aux0 xs (y :: ys) |>.dp
-    let dp := lcs1.aux0 (x :: xs) (y :: ys) |>.dp
-    let pp := lcs1.aux2 x (lcs1.aux0 xs ys) |>.2
-    let eq := lcs1.aux4 x y xx pp.1 pp.2
-    have h :=
-      calc lcs1.aux0 (x :: xs) (y :: ys)
-      _  = (x :: xs).foldr lcs1.aux1 (y :: ys).dps0 := rfl
-      _  = lcs1.aux1 x (lcs1.aux0 xs (y :: ys)) := rfl
-      _  = lcs1.aux1 x ((y, xx) :: lcs1.aux0 xs ys) := congrArg (lcs1.aux1 x) aux0_ex
-      _  = (y, eq) :: lcs1.aux0 (x :: xs) ys := rfl
-    have : dp = eq := congrArg DPS.dp h
-    calc lcs1.aux0 (x :: xs) (y :: ys)
-    _  = (y, eq) :: lcs1.aux0 (x :: xs) ys := h
-    _  = (y, dp) :: lcs1.aux0 (x :: xs) ys := this.rec rfl
-
-theorem aux0_nil {xs : List α} : lcs1.aux0 xs [] = [] :=
-  match xs with
-  | [] => rfl
-  | x :: xs =>
-    calc lcs1.aux0 (x :: xs) []
-    _  = (x :: xs).foldr lcs1.aux1 [] := rfl
-    _  = lcs1.aux1 x (xs.foldr lcs1.aux1 []) := rfl
-    _  = lcs1.aux1 x (lcs1.aux0 xs []) := rfl
-    _  = lcs1.aux1 x [] := congrArg (lcs1.aux1 x) aux0_nil
+    calc aux0 (x :: xs) []
+    _  = aux1 x (aux0 xs []) := rfl
+    _  = aux1 x [] := congrArg (aux1 x) aux0_nil
     _  = [] := rfl
+
+theorem aux0_cons {y : α} {xs ys : List α} :
+    aux0 xs (y :: ys) = (y, (aux0 xs (y :: ys)).dp) :: aux0 xs ys :=
+  match xs with
+  | [] => rfl
+  | x :: xs =>
+    let xx := aux0 xs (y :: ys) |>.dp
+    let dp := aux0 (x :: xs) (y :: ys) |>.dp
+    let pp := aux2 x (aux0 xs ys) |>.2
+    let eq := aux4 x y xx pp.1 pp.2
+    have h :=
+      calc aux0 (x :: xs) (y :: ys)
+      _  = aux1 x (aux0 xs (y :: ys)) := rfl
+      _  = aux1 x ((y, xx) :: aux0 xs ys) := congrArg (aux1 x) aux0_cons
+      _  = (y, eq) :: aux0 (x :: xs) ys := rfl
+    have : dp = eq := congrArg DPS.dp h
+    calc aux0 (x :: xs) (y :: ys)
+    _  = (y, eq) :: aux0 (x :: xs) ys := h
+    _  = (y, dp) :: aux0 (x :: xs) ys := this.rec rfl
 
 mutual
 theorem aux4_rec {x : α} {xs ys : List α} :
-    lcs1.aux2 x (lcs1.aux0 xs ys) =
-    (lcs1.aux0 (x :: xs) ys, (lcs1.aux0 (x :: xs) ys).dp, (lcs1.aux0 xs ys).dp) :=
+    aux2 x (aux0 xs ys) = (aux0 (x :: xs) ys, (aux0 (x :: xs) ys).dp, (aux0 xs ys).dp) :=
   match ys with
   | [] =>
-    calc lcs1.aux2 x (lcs1.aux0 xs [])
-    _  = lcs1.aux2 x [] := congrArg _ aux0_nil
+    calc aux2 x (aux0 xs [])
+    _  = aux2 x [] := congrArg _ aux0_nil
     _  = ([], dp0, dp0) := rfl
-    _  = (lcs1.aux0 (x :: xs) [], (lcs1.aux0 (x :: xs) []).dp, (lcs1.aux0 xs []).dp) :=
+    _  = (aux0 (x :: xs) [], (aux0 (x :: xs) []).dp, (aux0 xs []).dp) :=
       by rw [aux0_nil, aux0_nil] ; rfl
   | y :: ys =>
-    let zz := lcs1.aux0 (x :: xs) (y :: ys) |>.dp
-    let xx := lcs1.aux0 xs (y :: ys) |>.dp
-    let dps := lcs1.aux0 (x :: xs) ys
-    let yy := lcs1.aux0 (x :: xs) ys |>.dp
-    let xy := lcs1.aux0 xs ys |>.dp
-    let dp := lcs1.aux4 x y xx yy xy
+    let zz := aux0 (x :: xs) (y :: ys) |>.dp
+    let xx := aux0 xs (y :: ys) |>.dp
+    let dps := aux0 (x :: xs) ys
+    let yy := aux0 (x :: xs) ys |>.dp
+    let xy := aux0 xs ys |>.dp
+    let dp := aux4 x y xx yy xy
 
-    have h₁ : lcs1.aux0 (x :: xs) (y :: ys) = (y, dp) :: dps := aux0_rec
+    have h₁ : aux0 (x :: xs) (y :: ys) = (y, dp) :: dps := aux0_def
     have h₂ : zz = dp := congrArg DPS.dp h₁
 
-    calc lcs1.aux2 x (lcs1.aux0 xs (y :: ys))
-    _  = lcs1.aux2 x ((y, xx) :: lcs1.aux0 xs ys) := congrArg _ aux0_ex
-    _  = lcs1.aux3 x (y, xx) (lcs1.aux2 x (lcs1.aux0 xs ys)) := rfl
-    _  = lcs1.aux3 x (y, xx) (dps, yy, xy) := congrArg _ aux4_rec
+    calc aux2 x (aux0 xs (y :: ys))
+    _  = aux2 x ((y, xx) :: aux0 xs ys) := congrArg _ aux0_cons
+    _  = aux3 x (y, xx) (aux2 x (aux0 xs ys)) := rfl
+    _  = aux3 x (y, xx) (dps, yy, xy) := congrArg _ aux4_rec
     _  = ((y, dp) :: dps, dp, xx) := rfl
-    _  = (lcs1.aux0 (x :: xs) (y :: ys), zz, xx) := by rw [h₁, h₂]
+    _  = (aux0 (x :: xs) (y :: ys), zz, xx) := by rw [h₁, h₂]
 
-theorem aux0_rec {x y : α} {xs ys : List α} :
-    lcs1.aux0 (x :: xs) (y :: ys) =
-    (y, lcs1.aux4 x y (lcs1.aux0 xs (y :: ys)).dp (lcs1.aux0 (x :: xs) ys).dp (lcs1.aux0 xs ys).dp)
-    :: lcs1.aux0 (x :: xs) ys :=
-  let xx := lcs1.aux0 xs (y :: ys) |>.dp
-  let yy := lcs1.aux0 (x :: xs) ys |>.dp
-  let xy := lcs1.aux0 xs ys |>.dp
-  let dp := lcs1.aux4 x y xx yy xy
-  let pp := lcs1.aux2 x (lcs1.aux0 xs ys) |>.2
-  let eq := lcs1.aux4 x y xx pp.1 pp.2
+theorem aux0_def {x y : α} {xs ys : List α} :
+    aux0 (x :: xs) (y :: ys) =
+    (y, aux4 x y (aux0 xs (y :: ys)).dp (aux0 (x :: xs) ys).dp (aux0 xs ys).dp) :: aux0 (x :: xs) ys :=
+  let xx := aux0 xs (y :: ys) |>.dp
+  let yy := aux0 (x :: xs) ys |>.dp
+  let xy := aux0 xs ys |>.dp
+  let dp := aux4 x y xx yy xy
+  let pp := aux2 x (aux0 xs ys) |>.2
+  let eq := aux4 x y xx pp.1 pp.2
   have : eq = dp :=
     have : pp = (yy, xy) := congrArg Prod.snd aux4_rec
     have h₁ : pp.1 = yy := congrArg Prod.fst this
     have h₂ : pp.2 = xy := congrArg Prod.snd this
-    show lcs1.aux4 x y xx pp.1 pp.2 = lcs1.aux4 x y xx yy xy by rw [h₁, h₂]
-  calc lcs1.aux0 (x :: xs) (y :: ys)
-  _  = (x :: xs).foldr lcs1.aux1 (y :: ys).dps0 := rfl
-  _  = lcs1.aux1 x (lcs1.aux0 xs (y :: ys)) := rfl
-  _  = lcs1.aux1 x ((y, xx) :: lcs1.aux0 xs ys) := congrArg (lcs1.aux1 x) aux0_ex
-  _  = (y, eq) :: lcs1.aux0 (x :: xs) ys := rfl
-  _  = (y, dp) :: lcs1.aux0 (x :: xs) ys := this.rec rfl
+    show aux4 x y xx pp.1 pp.2 = aux4 x y xx yy xy by rw [h₁, h₂]
+  calc aux0 (x :: xs) (y :: ys)
+  _  = aux1 x (aux0 xs (y :: ys)) := rfl
+  _  = aux1 x ((y, xx) :: aux0 xs ys) := congrArg (aux1 x) aux0_cons
+  _  = (y, eq) :: aux0 (x :: xs) ys := rfl
+  _  = (y, dp) :: aux0 (x :: xs) ys := this.rec rfl
 end
+
+end lcs1
+
+section
+open lcs1
 
 theorem nil_lcs1 {ys : List α} : lcs1 [] ys = [] := ys.casesOn rfl fun _ _ => rfl
 theorem lcs1_nil {xs : List α} : lcs1 xs [] = [] := congrArg (DP.lcs ∘ DPS.dp) aux0_nil
@@ -264,9 +283,9 @@ theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
   | [], ys => nil_lcs1.trans nil_lcs0.symm
   | xs, [] => lcs1_nil.trans lcs0_nil.symm
   | x :: xs, y :: ys =>
-    let xx1 := lcs1.aux0 xs (y :: ys) |>.dp
-    let yy1 := lcs1.aux0 (x :: xs) ys |>.dp
-    let xy1 := lcs1.aux0 xs ys |>.dp
+    let xx1 := aux0 xs (y :: ys) |>.dp
+    let yy1 := aux0 (x :: xs) ys |>.dp
+    let xy1 := aux0 xs ys |>.dp
 
     let xx0 := lcs0 xs (y :: ys)
     let yy0 := lcs0 (x :: xs) ys
@@ -281,12 +300,14 @@ theorem lcs1_eq_lcs0 {xs ys : List α} : lcs1 xs ys = lcs0 xs ys :=
     have ee : e1 = e0 := by unfold e1 ; rw [←xx1.length_eq, ←yy1.length_eq, hxx, hyy]
 
     calc lcs1 (x :: xs) (y :: ys)
-    _  = (lcs1.aux0 (x :: xs) (y :: ys)).dp.lcs := rfl
-    _  = (lcs1.aux4 x y xx1 yy1 xy1).lcs := congrArg (DP.lcs ∘ DPS.dp) aux0_rec
+    _  = (aux0 (x :: xs) (y :: ys)).dp.lcs := rfl
+    _  = (aux4 x y xx1 yy1 xy1).lcs := congrArg (DP.lcs ∘ DPS.dp) aux0_def
     _  = if x = y then x :: xy1.lcs else DP.lcs _ := apply_ite DP.lcs ..
     _  = if x = y then x :: xy1.lcs else e1 := congrArg _ (apply_ite DP.lcs ..)
     _  = if x = y then x :: xy0 else e0 := by rw [hxy, ee]
     _  = lcs0 (x :: xs) (y :: ys) := by unfold lcs0 ; rfl
+
+end
 
 theorem lcs1_LCS {xs ys : List α} : LCS xs ys (lcs1 xs ys) := lcs1_eq_lcs0.symm.rec lcs0_LCS
 
@@ -311,12 +332,14 @@ def lcs2 (xs ys : List α) : List α := Id.run do
       i := i + 1
   return dps.back!.1
 
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs2 [] []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs2 "ABCD".toList []
-/-- info: ""     -/ #guard_msgs(info) in #eval String.mk <| lcs2 [] "ACBAD".toList
-/-- info: "ACD"  -/ #guard_msgs(info) in #eval String.mk <| lcs2 "ABCD".toList "ACBAD".toList
-/-- info: "AC"   -/ #guard_msgs(info) in #eval String.mk <| lcs2 "GAC".toList "AGCAT".toList
-/-- info: "MJAU" -/ #guard_msgs(info) in #eval String.mk <| lcs2 "XMJYAUZ".toList "MZJAWXU".toList
+section unittest
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs2 ""        ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs2 "ABCD"    ""
+/-- info: ""     -/ #guard_msgs(info) in #eval test_string lcs2 ""        "ACBAD"
+/-- info: "ACD"  -/ #guard_msgs(info) in #eval test_string lcs2 "ABCD"    "ACBAD"
+/-- info: "AC"   -/ #guard_msgs(info) in #eval test_string lcs2 "GAC"     "AGCAT"
+/-- info: "MJAU" -/ #guard_msgs(info) in #eval test_string lcs2 "XMJYAUZ" "MZJAWXU"
+end unittest
 
 theorem lcs2_eq_lcs1 {xs ys : List α} : lcs2 xs ys = lcs1 xs ys := sorry
 
