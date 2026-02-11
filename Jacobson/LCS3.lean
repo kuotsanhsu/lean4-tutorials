@@ -338,12 +338,6 @@ section unittest
 /-- info: "MJAU" -/ #guard_msgs(info) in #eval test_string lcs2 "XMJYAUZ" "MZJAWXU"
 end unittest
 
-theorem lcs2_eq_lcs1 {xs ys : List α} : lcs2 xs ys = lcs1 xs ys := sorry
-
-theorem lcs2_eq_lcs0 {xs ys : List α} : lcs2 xs ys = lcs0 xs ys := trans lcs2_eq_lcs1 lcs1_eq_lcs0
-
-theorem lcs2_LCS {xs ys : List α} : LCS xs ys (lcs2 xs ys) := lcs2_eq_lcs1.symm.rec lcs1_LCS
-
 theorem lcs2_nil {xs : List α} : lcs2 xs [] = [] := rfl
 
 open Std.Do in
@@ -353,38 +347,26 @@ theorem nil_lcs2 {ys : List α} : lcs2 [] ys = [] := by
   mvcgen invariants
   . ⇓ (_, dps) => ⌜dps = default⌝
   . ⇓ _ => ⌜True⌝
-  -- case vc1.step => exact trivial
-  -- case vc2.step.pre => exact trivial
   case vc3.step.post.success pref _ _ h _ _ _ _ => match pref with | [] => nomatch h
-  -- case vc4.a.isFalse.pre => exact rfl
   case vc5.a.isFalse.post.success hys dps h => exact
-    -- have : dps = default := h
-    -- rw [this]
-    -- have : ys ≠ [] := List.isEmpty_eq_false_iff.mp (ys.isEmpty.not_eq_true.rec hys)
-    -- have : NeZero ys.length := NeZero.mk fun (e : ys.length = 0) => show False from
-    --   suffices ys.isEmpty from absurd this hys
-    --   ys.isEmpty_iff_length_eq_zero.mpr e
     match ys, hys with
     | y :: ys, _ =>
-      have :=
-        calc dps
-        _  = Vector.replicate ys.length.succ default := h
-        _  = ⟨Array.replicate ys.length.succ default, _⟩ := Vector.replicate_eq_mk_replicate
-        _  = ⟨(Array.replicate ys.length default).push default, _⟩ := Vector.mk_eq.mpr Array.replicate_succ
-        _  = Vector.push ⟨Array.replicate ys.length default, _⟩ default := rfl
-        _  = Vector.push (Vector.replicate ys.length default) default := by rw [Array.vector_mk_replicate]
-        _  = Vector.push default default := rfl
-      have :=
+      show dps.back!.fst = [] from
+      suffices dps.back! = default from congrArg Prod.fst this
+      suffices dps.back? = some default from
         calc dps.back!
-        -- _  = dps.toArray.back! := rfl
-        -- _  = dps[ys.length - 1] := sorry
-        -- _  = dps.get ⟨ys.length - 1, _⟩ := sorry
         _  = dps.back?.getD _ := Array.back!_eq_back?
-        -- _  = dps.back := Array.back?_eq_some_iff.mpr _
-      calc dps.back!.fst
-      -- _  = dps.back.fst := sorry --congrArg _ (Array.back_eq_getElem _).symm
-      _  = (dps.back?.getD default).fst := congrArg _ Array.back!_eq_back?
-      -- _  = dps.back.fst := congrAgr
-      _  = [] := sorry
+        _  = (some default).getD _ := congrArg (Option.getD · default) this
+      suffices _ from Array.back?_eq_some_iff.mpr ⟨_, this⟩
+      calc dps.toArray
+      _  = Array.replicate ys.length.succ default := congrArg _ h
+      _  = (Array.replicate ys.length default).push default := Array.replicate_succ
 
-#check NeZero
+theorem lcs2_eq_lcs1 : {xs ys : List α} → lcs2 xs ys = lcs1 xs ys
+  | [], ys => nil_lcs2.trans nil_lcs1.symm
+  | xs, [] => lcs2_nil.trans lcs1_nil.symm
+  | x :: xs, y :: ys => sorry
+
+theorem lcs2_eq_lcs0 {xs ys : List α} : lcs2 xs ys = lcs0 xs ys := trans lcs2_eq_lcs1 lcs1_eq_lcs0
+
+theorem lcs2_LCS {xs ys : List α} : LCS xs ys (lcs2 xs ys) := lcs2_eq_lcs1.symm.rec lcs1_LCS
