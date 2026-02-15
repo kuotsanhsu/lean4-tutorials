@@ -323,7 +323,7 @@ def lcs2 (xs ys : List α) : List α := Id.run do
     let mut xy : List α × Nat := ([], 0)
     for y in ys.reverse do
       let xx := dps[i]!
-      yy := if x = y then (x::xy.1, xy.2 + 1) else if xx.2 ≥ yy.2 then xx else yy
+      yy := if x = y then (x :: xy.1, xy.2 + 1) else if xx.2 ≥ yy.2 then xx else yy
       dps := dps.set! i yy
       xy := xx
       i := i + 1
