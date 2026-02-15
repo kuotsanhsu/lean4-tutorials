@@ -161,10 +161,11 @@ structure DP α where
   length : Nat
   length_eq : lcs.length = length
 
-def dp0 : DP α := ⟨[], 0, rfl⟩
-def DPS α := List (α × DP α)
-abbrev DPS.dp : DPS α → DP α | [] => dp0 | (_, dp) :: _ => dp
-def dps0 : List α → DPS α := map (·, dp0)
+scoped instance : Inhabited (DP α) where default := ⟨[], 0, rfl⟩
+example : @Eq (DP α) default ⟨[], 0, rfl⟩ := rfl
+abbrev DPS α := List (α × DP α)
+example : @Eq (DPS α × DP α × DP α) default ([], ⟨[], 0, rfl⟩, ⟨[], 0, rfl⟩) := rfl
+abbrev DPS.dp : DPS α → DP α | [] => default | (_, dp) :: _ => dp
 
 end lcs1
 
@@ -172,9 +173,9 @@ open lcs1 in
 /-- Quadratic time and quadratic space dynamic programming. -/
 def lcs1 (xs ys : List α) : List α := aux0.dp.lcs
 where
-  aux0 : DPS α := xs.foldr aux1 (dps0 ys)
+  aux0 : DPS α := xs.foldr aux1 (ys.map (·, default))
   aux1 (x : α) (dps : DPS α) : DPS α := (aux2 x dps).1
-  aux2 (x : α) (dps : DPS α) : DPS α × DP α × DP α := dps.foldr (aux3 x) ([], dp0, dp0)
+  aux2 (x : α) (dps : DPS α) : DPS α × DP α × DP α := dps.foldr (aux3 x) default
   aux3 (x : α) : α × DP α → DPS α × DP α × DP α → DPS α × DP α × DP α
     | (y, xx), (dps, yy, xy) => let dp := aux4 x y xx yy xy ; ((y, dp) :: dps, dp, xx)
   aux4 (x y : α) (xx yy xy : DP α) : DP α :=
@@ -197,8 +198,8 @@ variable {x y : α} {xs ys : List α}
 
 example :=
   calc aux0 (x :: xs) ys
-  _  = (x :: xs).foldr aux1 (dps0 ys) := rfl
-  _  = aux1 x (xs.foldr aux1 (dps0 ys)) := rfl
+  _  = (x :: xs).foldr aux1 _ := rfl
+  _  = aux1 x (xs.foldr aux1 _) := rfl
   _  = aux1 x (aux0 xs ys) := rfl
 
 theorem aux0_nil : {xs : List α} → aux0 xs [] = []
@@ -248,7 +249,7 @@ where lem : ∀ {ys}, aux2 x (aux0 xs ys) = (aux0 (x :: xs) ys, (aux0 (x :: xs) 
   | [] =>
     calc aux2 x (aux0 xs [])
     _  = aux2 x [] := congrArg _ aux0_nil
-    _  = ([], dp0, dp0) := rfl
+    _  = ([], default, default) := rfl
     _  = (aux0 (x :: xs) [], (aux0 (x :: xs) []).dp, (aux0 xs []).dp) := by rw [aux0_nil, aux0_nil]
   | y :: ys =>
     let zz := aux0 (x :: xs) (y :: ys) |>.dp
@@ -312,18 +313,19 @@ theorem lcs1_LCS {xs ys : List α} : LCS xs ys (lcs1 xs ys) := lcs1_eq_lcs0.symm
 ## Dynamic programming taking quadratic time and backtracking space (mutable vector)
 -/
 
+open lcs1 in
 /-- Quadratic time and backtracking space dynamic programming. -/
 def lcs2 (xs ys : List α) : List α := Id.run do
   if ys.isEmpty then
     return []
-  let mut dps : Vector (List α × Nat) ys.length := default
+  let mut dps : Vector (DP α) ys.length := default
   for x in xs.reverse do
     let mut i := 0
-    let mut yy : List α × Nat := ([], 0)
-    let mut xy : List α × Nat := ([], 0)
+    let mut yy : DP α := default
+    let mut xy : DP α := default
     for y in ys.reverse do
       let xx := dps[i]!
-      yy := if x = y then (x :: xy.1, xy.2 + 1) else if xx.2 ≥ yy.2 then xx else yy
+      yy := aux4 x y xx yy xy
       dps := dps.set! i yy
       xy := xx
       i := i + 1
@@ -340,32 +342,50 @@ end unittest
 
 theorem lcs2_nil {xs : List α} : lcs2 xs [] = [] := rfl
 
-open Std.Do in
+open lcs1 Std.Do in
 theorem nil_lcs2 {ys : List α} : lcs2 [] ys = [] := by
   generalize h : lcs2 [] ys = zs
   apply Id.of_wp_run_eq h
   mvcgen invariants
   . ⇓ (_, dps) => ⌜dps = default⌝
   . ⇓ _ => ⌜True⌝
-  case vc3.step.post.success pref _ _ h _ _ _ _ => match pref with | [] => nomatch h
-  case vc5.a.isFalse.post.success hys dps h => exact
-    match ys, hys with
-    | y :: ys, _ =>
-      show dps.back!.fst = [] from
-      suffices dps.back! = default from congrArg Prod.fst this
-      suffices dps.back? = some default from
-        calc dps.back!
-        _  = dps.back?.getD _ := Array.back!_eq_back?
-        _  = (some default).getD _ := congrArg (Option.getD · default) this
-      suffices _ from Array.back?_eq_some_iff.mpr ⟨_, this⟩
-      calc dps.toArray
-      _  = Array.replicate ys.length.succ default := congrArg _ h
-      _  = (Array.replicate ys.length default).push default := Array.replicate_succ
+  case vc3.step.post.success pref _ _ h _ _ _ _ => exact match pref with | [] => nomatch h
+  case vc5.a.isFalse.post.success hys dps h => exact match ys, hys, dps, h with
+    | y :: ys, _, _, rfl =>
+      suffices (Array.replicate ys.length.succ default).back! = default from congrArg DP.lcs this
+      congrArg Array.back! Array.replicate_succ |>.trans Array.back!_push
 
-theorem lcs2_eq_lcs1 : {xs ys : List α} → lcs2 xs ys = lcs1 xs ys
-  | [], ys => nil_lcs2.trans nil_lcs1.symm
-  | xs, [] => lcs2_nil.trans lcs1_nil.symm
-  | x :: xs, y :: ys => sorry
+set_option pp.showLetValues true
+open lcs1 Std.Do in
+theorem lcs2_eq_lcs1 {xs ys : List α} : lcs2 xs ys = lcs1 xs ys := by
+  -- have : NeZero (y :: ys).length := sorry
+  generalize h : lcs2 xs ys = lcs
+  apply Id.of_wp_run_eq h
+  mvcgen invariants
+  . ⇓ (c, dps) =>
+    let xs := c.prefix.reverse
+    ⌜(aux0 xs ys).reverse.map Prod.snd = dps.toList⌝
+  . ⇓ ⟨c, dps, i, yy, xy⟩ =>
+    let ys := c.prefix.reverse
+    ⌜ys.length = i ∧ yy.1 = lcs1 xs ys ∧ xy.1 = lcs1 xs ys⌝
+  case vc1.a.isTrue h =>
+    have : ys = [] := nil_of_isEmpty h
+    rw [this, lcs1_nil]
+  case vc2.step rxs x _ hxs zz inv rys y _ hys _ dps _ i _ yy xy xx yy' dps' i' h =>
+    simp at h
+    have h₁ : rys.length = i := h.1
+    have h₂ : yy.1 = xs.lcs1 rys.reverse := h.2.1
+    have h₃ : xy.1 = xs.lcs1 rys.reverse := h.2.2
+    simp
+    constructor
+    . rw [h₁]
+    constructor
+    . sorry
+    . sorry
+  case vc3.step.pre => sorry
+  case vc4.step.post.success => sorry
+  case vc5.a.isFalse.pre => sorry
+  case vc6.a.isFalse.post.success => sorry
 
 theorem lcs2_eq_lcs0 {xs ys : List α} : lcs2 xs ys = lcs0 xs ys := trans lcs2_eq_lcs1 lcs1_eq_lcs0
 
